@@ -333,31 +333,31 @@ void serial2_test()
 							serial2_in = "";
 							if (vantay.length() == 1000)
 							{
-								// for (int i = 0; i < 498; i++)
-								// {
-								// 	datavantay1 += vantay.charAt(i);
-								// }
-								// for (int i = 500; i < 998; i++)
-								// {
-								// 	datavantay2 += vantay.charAt(i);
-								// }
-								// for (int i = 1; i < 250; i++)
-								// {
-								// 	vt1.data[i] = (datavantay1.charAt(2 * i - 1) << 8) + (datavantay1.charAt(2 * i - 2));
-								// }
-								// uart0.println();
-								// fp_func_write_template(vt1, 998);
-								// for (int i = 1; i < 250; i++)
-								// {
-								// 	vt2.data[i] = (datavantay2.charAt(2 * i - 1) << 8) + (datavantay2.charAt(2 * i - 2));
-								// }
-								// fp_func_write_template(vt2, 999);
-								// uart0.println();
-								// for (int i = 0; i < 250; i++)
-								// {
-								// 	vt1.data[i] = 0;
-								// 	vt2.data[i] = 0;
-								// }
+								for (int i = 0; i < 498; i++)
+								{
+									datavantay1 += vantay.charAt(i);
+								}
+								for (int i = 500; i < 998; i++)
+								{
+									datavantay2 += vantay.charAt(i);
+								}
+								for (int i = 1; i < 250; i++)
+								{
+									vt1.data[i] = (datavantay1.charAt(2 * i - 1) << 8) + (datavantay1.charAt(2 * i - 2));
+								}
+								uart0.println();
+								fp_func_write_template(vt1, 998);
+								for (int i = 1; i < 250; i++)
+								{
+									vt2.data[i] = (datavantay2.charAt(2 * i - 1) << 8) + (datavantay2.charAt(2 * i - 2));
+								}
+								fp_func_write_template(vt2, 999);
+								uart0.println();
+								for (int i = 0; i < 250; i++)
+								{
+									vt1.data[i] = 0;
+									vt2.data[i] = 0;
+								}
 								datavantay1 = datavantay2 = "";
 								// play_audio(thanh_cong, sizeof(thanh_cong));
 								vantay = "";
