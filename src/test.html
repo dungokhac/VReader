@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head>
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+
+</head>
+<body>
+
+  Prefix <input type="text" name="prefix" id="prefix">  <br>
+  CMD <input type="text" name="cmd" id="cmd">  <br>
+  len <input type="text" name="len" id="len">  <br>
+  data <textarea id="data" name="data" rows="4" cols="50"></textarea>  <br>
+  rs   <textarea id="rsdata" name="rsdata" rows="4" cols="50"></textarea>
+ <button type="button" id="check">Tính</button>
+
+
+
+<script>
+  $(document).ready(function(){
+    $("#check").click(function(){
+      var prefix = $( "#prefix" ).val();
+      var cmd = $("#cmd").val();
+      var len = $("#len").val();
+      var data = $("#data").val();
+      
+      var str = prefix+ cmd+len+ data;
+      var cks;
+      var count=0,n=0;
+      
+      len = parseInt(len.substring(0, 2), 16)+ parseInt(len.substring(2,4), 16) *256;
+      if (len<=16){
+
+        len=22 *2;
+      }
+      else  len = (498+8)*2;
+
+      // len =  len*2;
+      console.log("len"+len);
+      for (let index = 0; index < len; index+=2) {
+        let hex1 = parseInt(str.substring(index, index+2), 16);
+        console.log("hex:"+hex1);
+        // let hex2 =  parseInt(str.substring(index+2, index+4), 16);
+        
+        if(isNaN(hex1)) hex1=0;
+        // if(isNaN(hex2)) hex2=0;
+
+        n=hex1;
+        count += n;
+        // if(count>=65536) count=0;
+        // console.log("count:"+count);
+      }
+      console.log("count"+count);
+      cks = count.toString(16);
+      console.log("cks2"+cks);
+      if (cks.length % 2 != 0) {
+        cks = '0'+cks;
+      }
+      cks = cks.substring(2, 6)+cks.substring(0,2);
+      console.log(cks);
+      $("#rsdata").val(str+cks.toUpperCase());
+      // const parsed = parseInt(data, 16);
+      // console.log(str);
+
+    });
+  });
+  </script>
+</body>
+</html>

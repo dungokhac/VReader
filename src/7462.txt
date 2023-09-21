@@ -1,0 +1,2826 @@
+#include "ph_Datatypes.h"
+#include "ph_Status.h"
+#include "phExMfCrypto_MfDfCrypto.h"
+#include "phpalMifare.h"
+#include "phpalI14443p4.h"
+#include "phUser.h"
+#include "phpalI14443p4a.h"
+#include "ph_Log.h"
+#include "phpalI14443p3a.h"
+#include "phalMfdf.h"
+#include "phCryptoRng.h"
+#include "phCryptoSym.h"
+#include "phKeyStore.h"
+#include "PN7462AU_Ver.h"
+#include "phhalHif.h"
+#include "phhalEeprom.h"
+#include "phhalI2CM.h"
+#include "phhalGpio.h"
+#include "ph_Reg.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+#include <phCryptoSym.h>
+#define COI (2)
+#define LED (3)
+#define KEYPAD (4)
+
+#ifdef NXPBUILD__PHAC_DISCLOOP_TYPEA_TAGS
+/* *****************************************************************************************************************
+ * Internal Definitions
+ * ***************************************************************************************************************** */
+/* define Key Store constants */
+#define PH_EXMFCRYPTO_MIFAREDESFIRE_NUMBER_OF_KEYENTRIES 4
+#define PH_EXMFCRYPTO_MIFAREDESFIRE_NUMBER_OF_KEYVERSIONPAIRS 1
+#define PH_EXMFCRYPTO_MIFAREDESFIRE_NUMBER_OF_KUCENTRIES 4
+#define PH_TOOLS_CRC8_PRESET_UID 0xFDU
+#define PH_TOOLS_CRC8_POLY_EPCUID 0x1DU
+#define PH_TOOLS_PARITY_OPTION_EVEN 0x00U
+#define PH_TOOLS_CRC_OPTION_OUPUT_INVERTED 0x01U
+#define PH_TOOLS_CRC_OPTION_DEFAULT 0x00U
+
+#define f1_6k_max 256
+#define msg8_max 512
+#define buf8_max 128
+#define len_max buf8_max - 4
+
+#define IDLE 1
+#define DocXacThuc 2
+#define xemttthe 3
+#define RD 4
+#define LenhMoRong 5
+#define LenhTongHop 6
+#define Thoat 7
+#define cholenh 8
+#define ghivantay 9
+#define AT24C32 0x57
+
+static int msg8_in;
+static int start_ok = 0;
+static unsigned char textoffset;
+static unsigned char textoffset2;
+static int trangthaixemthongtinthe = 0;
+static int t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, ghi = 0, ghif6 = 0, vtsave = 0;
+static int CKS = 0, trovebandau = 1, checksumdata1 = 0, checksumdata02 = 0, checksumtien = 0, checksummatkhau = 0, checksumdata01 = 0, checksumlogtien = 0, checksumdata03 = 0, checksumdata04 = 0;
+static int checksuminput, CKSMayTinhGui, trangthaixacthuc = 0, cksuidvao = 0, cksvidthe = 0;
+static int timeout10s = 0, timeout5s = 0, timeout2s = 0, timeout20s = 0, timetrangthaidoc = 0, aaabbb = 0, timeoutghi = 0;
+static int j, dec, l;
+static int lenk = 0;
+static int dangthuchienlenh = 0, dangtimeout = 0;
+static int datalen120, datalen1, datalen2, datalen4, datalen5, datalen6, datalen7;
+
+static phStatus_t status;
+static uint8_t cmd = IDLE;
+static uint8_t oled_status = 0;
+static uint8_t bFileNo;
+static uint8_t *bRxDaTa;
+static uint16_t wRxLength;
+static uint8_t m108, m109, m110, m111, m112, m113, m114, m120, xt5, xt6, xt7;
+static uint8_t vIDHienTai[7], HoTenHienTai[20], CCCDHienTai[12], TaiKhoanHienTai[20], SoTheBHYT[15], LogTaiChinh[80], CheckSumthe[4], vIDHienTaithu2[7], HanMucThe[10], NgaySinh[8], GioiTinh[1], QuocTich[3], DiaChi[54], NgayCapCMT[6], DienThoai[10], Email[36], MatKhauHienTai[6], MaDonViMaCaNhan[20], SoTheXemTT[7], MatKhauXemTT[6];
+static uint8_t Lenh112[f1_6k_max], Lenh113[f1_6k_max], Lenh114[f1_6k_max], Lenh115[f1_6k_max / 2], Lenh116[f1_6k_max], Lenh116b[f1_6k_max / 2];
+static uint8_t SoTienHienTai[13], GhiNhoTien[10];
+static uint8_t uID[7], pDieID[17];
+static uint8_t pValue[4];
+static uint8_t pOffset1[3], pOffset2[3], pOffset4[3], pOffset7[3], pOffset6[3];
+static uint8_t Lenh8[50], Lenh9[210], Lenh10[210], Lenh11[210], Lenh120[20], DuLieuDuaVao[200], dulieuthogntinthe[246];
+static uint8_t DuLieuGuiMayTinh[150];
+static uint16_t i;
+static uint8_t tmp[40], Uidbangchu[14], mathietbibangchu[34];
+static uint8_t k[2], k11[32];
+static uint8_t kx[16];
+static uint8_t k1[64] = "5050464664528864825064884658828858648248866280866050644660464690";
+static uint8_t k2[64] = "8060546250808662824646864852505660606080885684526260505080646250";
+static uint8_t k3[64] = "6050905648565656505882865446566064888680886054486464888888568688";
+static uint8_t k6[64] = "5850888260506448465054808848848654646088544852486246568284545490";
+static uint8_t k7[64] = "8250846280606056825458565884908656568290808262468860645656568052";
+static uint8_t k8[64] = "5882648860565086904664549048485290625288909088548258488258604682";
+static uint8_t k9[64] = "4650625448645082468454805288645490806486469046485460568664648684";
+
+uint8_t SoLuongKyTu[3];
+uint8_t room_buf[40], tx_buf[200];
+uint8_t index, index1;
+
+int hexadecimalToDecimal(char hexVal[]);
+void decodekey(char key[]);
+void LayByteDau(int so);
+void LayBytecuoi(int so);
+int tinhchecksuminput();
+void DocTT_ok();
+void DocTTMH2_ok();
+int TinhCheckSumMK(char hexValSV[], char hexValCard[], int step);
+void timeout_10s();
+void check_timeout_trangthaidoc();
+void trangthaixacthuc1(int a);
+void laygiatriuid(char s[]);
+/* *****************************************************************************************************************
+ * Type Definitions
+ * ***************************************************************************************************************** */
+static phStatus_t phExMfCrypto_KeySet(uint16_t wKeyNumber, uint16_t wKeyVersion, uint16_t wKeyStoreKeyType,
+                                      uint8_t *pNewKey);
+
+static phStatus_t phExMfCrypto_CreateApp(uint8_t bOption, uint8_t bKeySettings1, uint8_t bKeySettings2,
+                                         uint8_t *pAppId);
+/* *****************************************************************************************************************
+ * Global and Static Variables
+ * Total Size: NNNbytes
+ * ***************************************************************************************************************** */
+/* data parameter storage */
+
+PH_NOINIT static uint8_t gkphExMfCrypto_pNewKey[16]; /* KeyA & KeyB */
+static const uint8_t gkphExMfCrypto_AppId_000[3] = {0, 0, 0};
+// static const uint8_t ViVimass[3] = {0x31, 0x05, 0x12};
+static const uint8_t ViVimass[3] = {0x31, 0x87, 0x37};
+
+PH_NOINIT static phpalMifare_Sw_DataParams_t spalMifare;
+PH_NOINIT static phKeyStore_Sw_DataParams_t sKeyStore;
+PH_NOINIT static phalMfdf_Sw_DataParams_t salMfdf;
+PH_NOINIT static phCryptoSym_Sw_DataParams_t sCryptoSym;
+PH_NOINIT static phCryptoSym_Sw_DataParams_t sCryptoSymRnd;
+PH_NOINIT static phCryptoRng_Sw_DataParams_t sCryptoRng;
+
+/* *****************************************************************************************************************
+ * Public Functions
+ * ***************************************************************************************************************** */
+/**
+ * Example application's mifare desfires operations entry point.
+ *
+ * @param psDiscLoopParams : Discovery loop data params.
+ * @return Status of the operation.
+ */
+
+extern void init_gpio(void)
+{
+
+    phhalPcr_ConfigOutput(COI, true, false);
+    PH_HAL_GPIO_SETGPIOVAL(COI, true);
+
+    phhalPcr_ConfigOutput(KEYPAD, true, false);
+    PH_HAL_GPIO_SETGPIOVAL(KEYPAD, false);
+}
+
+void beep_s(void)
+{
+    PH_HAL_GPIO_SETGPIOVAL(COI, false);
+    phUser_Wait(200000);
+    PH_HAL_GPIO_SETGPIOVAL(COI, true);
+    phUser_Wait(200000);
+}
+void beep_ok(void)
+{
+    beep_s();
+}
+
+static void Erreur_Init_UART_Interrupt(void)
+{
+}
+
+static void ext_SetTxBufferEmptyInterrupt(void)
+{
+}
+
+typedef struct
+{
+    uint32_t t32;
+    uint8_t buf8[buf8_max];
+    uint8_t msg8[msg8_max];
+} struct_buf8;
+struct_buf8 rxbuf;
+
+uint8_t hexchar(uint8_t value)
+{
+    if (value < 10)
+    {
+        return value + 48;
+    }
+
+    return value + 55;
+}
+void Doc2ManHinhCoBan(void)
+{
+    DocTT_ok();
+    //	DocTTMH2_ok();
+    return;
+}
+void DocTT_ok(void)
+{
+
+    uint8_t manhinhtt1[4] = "!^4_";
+    phhalHif_Transmit((uint8_t *)&manhinhtt1, 4, (pphhalHif_Callback_t)&ext_SetTxBufferEmptyInterrupt);
+    phUser_Wait(2000);
+
+    phhalHif_Transmit((uint8_t *)&dulieuthogntinthe, 246, (pphhalHif_Callback_t)&ext_SetTxBufferEmptyInterrupt);
+    phUser_Wait(50000);
+
+    manhinhtt1[0] = '#';
+    phhalHif_Transmit((uint8_t *)&manhinhtt1, 1, (pphhalHif_Callback_t)&ext_SetTxBufferEmptyInterrupt);
+    phUser_Wait(1000);
+
+    return;
+}
+void DocTTMH2_ok(void)
+{
+    uint8_t manhinhtt2[121];
+    manhinhtt2[0] = '_';
+    for (i = 0; i < 63; i++)
+    {
+        manhinhtt2[i + 1] = LogTaiChinh[i];
+    }
+    manhinhtt2[64] = '_';
+    manhinhtt2[65] = '1';
+    manhinhtt2[66] = '0';
+    manhinhtt2[67] = '1';
+    manhinhtt2[68] = '#';
+    phhalHif_Transmit((uint8_t *)&manhinhtt2, 69, (pphhalHif_Callback_t)&ext_SetTxBufferEmptyInterrupt);
+    phUser_Wait(10000);
+}
+
+extern void check_timeout(void)
+{
+    if ((timeout2s > 0) && (timeout2s < 100))
+        timeout2s++;
+    //	if((timeoutghi > 0) && (timeoutghi <100)) timeoutghi++;
+    if ((timeout10s > 0) && (timeout10s < 100))
+        timeout10s++;
+    if ((timeout20s > 0) && (timeout20s < 200))
+        timeout20s++;
+    if ((timetrangthaidoc > 0) && (timetrangthaidoc < 200))
+        timetrangthaidoc++;
+    if ((timeout5s > 0) && (timeout5s < 50))
+        timeout5s++;
+
+    if (timeout10s >= 100 || timeout20s >= 200 || timeout5s >= 50)
+        timeout_10s();
+    if (timeout2s >= 20)
+        ketthucdocxacthuc();
+    if (timetrangthaidoc >= 200)
+        check_timeout_trangthaidoc();
+}
+void ketthucdocxacthuc()
+{
+}
+
+void timeout_10s()
+{
+    dangthuchienlenh = 1;
+    dangtimeout = 1;
+    timetrangthaidoc = 0;
+    timeout10s = 0;
+    timeout20s = 0;
+    timeout5s = 0;
+    start_ok = 0;
+    //	timeoutghi = 0;
+    Xoa_Dl_Gui();
+    //	if(trovebandau==1)
+    //	{
+    //		Doc2ManHinhCoBan();
+    //	}
+    moi_tap_the();
+    cmd = IDLE;
+    trangthaixemthongtinthe = 0;
+    dangthuchienlenh = 0;
+    dangtimeout = 0;
+    return;
+}
+void check_timeout_trangthaidoc(void)
+{
+    timeout10s = 0;
+    timeout5s = 0;
+    timeout20s = 0;
+    timetrangthaidoc = 0;
+    start_ok = 0;
+    trangthaixemthongtinthe = 0;
+    dangthuchienlenh = 0;
+    dangtimeout = 0;
+    moi_tap_the();
+    return;
+}
+
+void process(void)
+{
+    timeout10s = 0;
+    timeout5s = 0;
+    timeout20s = 0;
+    int trangthai = 0;
+    oled_status = 1;
+    m108 = m109 = m110 = m111 = m112 = m120 = m114 = 0;
+
+    if (cmd == cholenh)
+    {
+        // Thuc hien lenh tong hop
+        // tru tien// mo cua // cong tien // thay doi tt1// thay doi tt2//tien thuong // doi app mt keys/doi access
+
+        i = 0;
+        char delim[] = "$";
+        char *ptr = strtok(rxbuf.msg8, delim);
+
+        while (ptr != NULL)
+        {
+            int sizelenh = strlen(ptr);
+            if (ptr[0] == '1' && ptr[1] == '0' && ptr[2] == '8' && ptr[3] == 'a')
+            {
+                // cap nhat tien 108
+                if (sizelenh > 10)
+                {
+                    for (i = 0; i < sizelenh; i++)
+                    {
+                        Lenh8[i] = ptr[i];
+                    }
+                    m108 = 1;
+                    uint8_t SoTien2[13];
+                    for (i = 0; i < 10; i++)
+                    {
+                        SoTien2[i] = Lenh8[i + 4];
+                    }
+                    for (i = 0; i < 9; i++)
+                    {
+                        if (SoTien2[i] == '0')
+                        {
+                            SoTien2[i] = 32;
+                        }
+                        else
+                        {
+                            break;
+                        }
+                    }
+                    SoTienHienTai[12] = SoTien2[9];
+                    SoTienHienTai[11] = SoTien2[8];
+                    SoTienHienTai[10] = SoTien2[7];
+                    SoTienHienTai[9] = 32;
+                    SoTienHienTai[8] = SoTien2[6];
+                    SoTienHienTai[7] = SoTien2[5];
+                    SoTienHienTai[6] = SoTien2[4];
+                    SoTienHienTai[5] = 32;
+                    SoTienHienTai[4] = SoTien2[3];
+                    SoTienHienTai[3] = SoTien2[2];
+                    SoTienHienTai[2] = SoTien2[1];
+                    SoTienHienTai[1] = 32;
+                    SoTienHienTai[1] = SoTien2[0];
+                }
+            }
+            else if (ptr[0] == '1' && ptr[1] == '0' && ptr[2] == '9')
+            {
+                // ghi file 1 109
+                if (sizelenh > 7)
+                {
+                    for (i = 0; i < sizelenh; i++)
+                    {
+                        Lenh9[i] = ptr[i];
+                    }
+                    // ghi data 1
+                    int tong = (Lenh9[3] - 48) * 100 + (Lenh9[4] - 48) * 10 + (Lenh9[5] - 48);
+                    pOffset1[0] = tong;
+                    pOffset1[1] = 0;
+                    pOffset1[2] = 0;
+                    datalen1 = sizelenh - 6;
+                    m109 = 1;
+                    if (Lenh9[3] == '0' && Lenh9[4] == '0' && Lenh9[5] == '0')
+                    {
+                        for (i = 0; i < 42; i++)
+                        {
+                            LogTaiChinh[i] = Lenh9[i + 86];
+                        }
+                        for (i = 0; i < 20; i++)
+                        {
+                            HoTenHienTai[i] = Lenh9[i + 13 + 6];
+                        }
+                        for (i = 0; i < 7; i++)
+                        {
+                            vIDHienTai[i] = Lenh9[i + 6];
+                        }
+                        for (i = 0; i < 12; i++)
+                        {
+                            CCCDHienTai[i] = Lenh9[i + 33 + 6];
+                        }
+                    }
+                }
+            }
+            else if (ptr[0] == '1' && ptr[1] == '1' && ptr[2] == '0')
+            {
+                if (sizelenh > 7)
+                {
+                    for (i = 0; i < sizelenh; i++)
+                    {
+                        Lenh10[i] = ptr[i];
+                    }
+                    // ghi data 2 110
+                    int tong = (Lenh10[3] - 48) * 100 + (Lenh10[4] - 48) * 10 + (Lenh10[5] - 48);
+                    pOffset2[0] = tong;
+                    pOffset2[1] = 0;
+                    pOffset2[2] = 0;
+                    datalen2 = sizelenh - 6;
+                    m110 = 1;
+                }
+            }
+            else if (ptr[0] == '1' && ptr[1] == '1' && ptr[2] == '1')
+            {
+                if (sizelenh > 7)
+                {
+                    for (i = 0; i < sizelenh; i++)
+                    {
+                        Lenh11[i] = ptr[i];
+                    }
+                    // data 4 111
+                    m111 = 1;
+                    int tong = (Lenh11[3] - 48) * 100 + (Lenh11[4] - 48) * 10 + (Lenh11[5] - 48);
+                    pOffset4[0] = tong;
+                    pOffset4[1] = 0;
+                    pOffset4[2] = 0;
+                    datalen4 = sizelenh - 6;
+                }
+            }
+            else if (ptr[0] == '1' && ptr[1] == '2' && ptr[2] == '0')
+            {
+                if (sizelenh > 10)
+                {
+                    for (i = 0; i < sizelenh - 3; i++)
+                    {
+                        Lenh120[i] = ptr[i + 3];
+                    }
+                    m120 = 1;
+                    datalen120 = sizelenh - 3;
+                    int sokt = 0;
+                    sokt = 20 - datalen120;
+                    if (sokt > 0)
+                    {
+                        for (i = 0; i < sokt; i++)
+                        {
+                            CCCDHienTai[i] = 32;
+                        }
+                    }
+                    for (i = 0; i < datalen120; i++)
+                    {
+                        CCCDHienTai[sokt + i] = Lenh120[i];
+                    }
+                }
+            }
+            // data 5
+            else if (ptr[0] == '1' && ptr[1] == '1' && ptr[2] == '2')
+            {
+                if (sizelenh > 7)
+                {
+                    for (i = 0; i < sizelenh; i++)
+                    {
+                        Lenh112[i] = ptr[i + 3];
+                    }
+                    m112 = 1;
+                    aaabbb = 0;
+                    datalen5 = sizelenh - 6;
+                }
+            }
+            //            // data 6
+            //            else if (ptr[0] == '1' && ptr[1] == '1' && ptr[2] == '3')
+            //            {
+            //
+            //                if (sizelenh > 7)
+            //                {
+            //                    int m = 0;
+            //                    for (m = 0; m < 250; m += 2)
+            //                    {
+            //                        uint8_t n1 = ptr[m + 7] - 48;
+            //                        uint8_t n2 = ptr[m + 7 + 1] - 48;
+            //                        if (n1 > 16)
+            //                            n1 = n1 - 7;
+            //                        if (n2 > 16)
+            //                            n2 = n2 - 7;
+            //                        Lenh116[m / 2] = n1 * 16 + n2;
+            //                    }
+            //                    // tìm vị trí lưu
+            //                    char str113[] = "";
+            //                    for (int i = 0; i < 4; i++)
+            //                    {
+            //                        str113[i] = ptr[i + 3];
+            //                    }
+            //                    vtsave = atoi(str113); // Chuyển chuỗi sang int
+            //                                           //                	printf("Số nguyên: %d\n", vtsave);
+            //                }
+            //
+            //                m113 = 1;
+            //            }
+
+            else if (ptr[0] == '1' && ptr[1] == '1' && ptr[2] == '3')
+            {
+
+                if (sizelenh > 7)
+                {
+                    int m = 0;
+                    if (ghi == 5)
+                    {
+                        for (m = 0; m < 24; m += 2)
+                        {
+                            uint8_t n1 = ptr[m + 7] - 48;
+                            uint8_t n2 = ptr[m + 7 + 1] - 48;
+                            if (n1 > 16)
+                                n1 = n1 - 7;
+                            if (n2 > 16)
+                                n2 = n2 - 7;
+                            Lenh116[m / 2] = n1 * 16 + n2;
+                        }
+                    }
+                    else
+                    {
+                        for (m = 0; m < 250; m += 2)
+                        {
+                            uint8_t n1 = ptr[m + 7] - 48;
+                            uint8_t n2 = ptr[m + 7 + 1] - 48;
+                            if (n1 > 16)
+                                n1 = n1 - 7;
+                            if (n2 > 16)
+                                n2 = n2 - 7;
+                            Lenh116[m / 2] = n1 * 16 + n2;
+                        }
+                    }
+
+                    // tìm vị trí lưu
+                    char str113[] = "";
+                    for (int i = 0; i < 4; i++)
+                    {
+                        str113[i] = ptr[i + 3];
+                    }
+                    vtsave = atoi(str113); // Chuyển chuỗi sang int
+                }
+
+                m113 = 1;
+            }
+            // data 7
+            else if (ptr[0] == '1' && ptr[1] == '1' && ptr[2] == '4')
+            {
+                m114 = 1;
+            }
+            ptr = strtok(NULL, delim);
+        }
+        trangthai = 1;
+    }
+    if (trangthai == 1)
+    {
+        // da nhan duoc lenh can cham the de thuc hien tiep
+        timeout5s = 1;
+        cmd = LenhTongHop;
+        dangthuchienlenh = 0;
+        return;
+    }
+    dangthuchienlenh = 0;
+    return;
+}
+void chedorieng()
+{
+
+    timeout10s = timeout20s = timeout5s = timetrangthaidoc = xt5 = xt6 = xt7 = 0;
+    if (rxbuf.msg8[1] == '2' && rxbuf.msg8[2] == 'x' && rxbuf.msg8[3] == '1')
+    {
+        // hien thi 2 man hinh co ban khi khong co yeu cau thay doi the tu server
+        // 2x1
+        if (cmd == cholenh)
+        {
+            DocTT_ok();
+            //			DocTTMH2_ok();
+        }
+        moi_tap_the();
+        Cho_2s();
+        return;
+    }
+    else if (rxbuf.msg8[1] == '2' && rxbuf.msg8[2] == 'x' && rxbuf.msg8[3] == '2')
+    {
+        // xem thong tin the
+        // 2x2
+        timeout10s = 1;
+        trangthaixemthongtinthe = 1;
+        return;
+    }
+    else if (rxbuf.msg8[1] == '2' && rxbuf.msg8[2] == 'x' && rxbuf.msg8[3] == '3')
+    {
+
+        // 2x3 //reset dong ho khong cho cham the cho 20s ve man hinh cho
+        timetrangthaidoc = 1;
+        return;
+    }
+    else if (rxbuf.msg8[1] == '2' && rxbuf.msg8[2] == 'x' && rxbuf.msg8[3] == '4')
+    {
+        // reset dong ho cho cham the, cho 20s ve man hinh cho
+        timetrangthaidoc = 1;
+        cmd = IDLE;
+        return;
+    }
+    else if (rxbuf.msg8[1] == '2' && rxbuf.msg8[2] == 'x' && rxbuf.msg8[3] == '5')
+    {
+        // 2x5 reset dong ho cho cham the
+        //		ghi = 1;
+        cmd = IDLE;
+        return;
+    }
+    else if (rxbuf.msg8[1] == '2' && rxbuf.msg8[2] == 'x' && rxbuf.msg8[3] == '6')
+    {
+        // 2x6
+        ghi = 1;
+        ghif6 = 0;
+        cmd = ghivantay;
+        timeout5s = 0;
+        return;
+    }
+    else if (rxbuf.msg8[1] == '2' && rxbuf.msg8[2] == 'x' && rxbuf.msg8[3] == '7')
+    {
+        //        // 2x7
+        //        //		cmd =cholenh; // ghi du lieu xac thuc
+        //        ghi = 1;
+        //        cmd = ghivantay;
+        //        timeout5s = 0;
+        //        //		ghi = 1;
+        //        //		chedocmd();
+        return;
+    }
+    else if (rxbuf.msg8[1] == '2' && rxbuf.msg8[2] == 'x' && rxbuf.msg8[3] == '8')
+    {
+        // 2x8  ket thuc ghi du lieu xac thuc
+        cmd = IDLE;
+        return;
+    }
+    else if (rxbuf.msg8[1] == '2' && rxbuf.msg8[2] == 'x' && rxbuf.msg8[3] == 'x' && rxbuf.msg8[4] == '1')
+    {
+        // 2xx1  ket thuc ghi du lieu xac thuc
+        cmd = DocXacThuc;
+        xt5 = 1;
+
+        batdaughi();
+        return;
+    }
+    else if (rxbuf.msg8[1] == '2' && rxbuf.msg8[2] == 'x' && rxbuf.msg8[3] == 'x' && rxbuf.msg8[4] == '2')
+    {
+        // 2xx2  ket thuc ghi du lieu xac thuc
+        cmd = DocXacThuc;
+        xt6 = 1;
+        batdaughi();
+        return;
+    }
+
+    else if (rxbuf.msg8[1] == '2' && rxbuf.msg8[2] == 'x' && rxbuf.msg8[3] == 'x' && rxbuf.msg8[4] == '3')
+    {
+        // 2xx3  ket thuc ghi du lieu xac thuc
+        cmd = DocXacThuc;
+        xt7 = 1;
+        //		batdaughi();
+        return;
+    }
+    else if (rxbuf.msg8[1] == '2' && rxbuf.msg8[2] == 'x' && rxbuf.msg8[3] == 'x')
+    {
+        // ve trang th  ai ban dau
+        moi_tap_the();
+        return;
+    }
+}
+// xu ly khi co lenh tu may tinh
+extern void myrx(void)
+{ // nhan du lieu tu may tinh
+    uint8_t b8;
+    for (int i = 0; i < len_max; i++)
+    {
+        b8 = rxbuf.buf8[i];
+        if ((b8 & 0x80) == 0)
+        {
+            if (b8 == 33)
+            {
+                msg8_in = 0;
+                start_ok = 1;
+                checksuminput = CKSMayTinhGui = 0;
+            }
+            else if (start_ok == 1)
+            {
+                rxbuf.msg8[msg8_in++] = b8;
+                checksuminput += b8;
+                msg8_in &= msg8_max - 1;
+
+                if (b8 == 35)
+                {
+                    //					chedocmd_int(cmd);
+                    if (rxbuf.msg8[2] == 120)
+                    {
+                        chedorieng();
+                    }
+                    else
+                    {
+                        trangthaixacthuc = tinhchecksuminput();
+                        if (trangthaixacthuc == 1)
+                        {
+                            process();
+                        }
+                        else
+                        {
+                            trangthaixacthuc = checksuminput = CKSMayTinhGui = 0;
+                            moi_tap_the();
+                        }
+                    }
+                }
+            }
+        }
+    }
+    msg8_in &= msg8_max - 1;
+    memset(rxbuf.buf8, 0x80, sizeof(rxbuf.buf8));
+    phhalHif_ReleaseRxBuffer(0);
+}
+extern int init_uart(void)
+{
+    phhalHif_Config_t s_ConfigNXP_HSUART;
+
+    s_ConfigNXP_HSUART.eInterface = E_HIF_HSU;
+    s_ConfigNXP_HSUART.sConfig.sHsuConfig.bIsHsuBoot = 0;
+    s_ConfigNXP_HSUART.sConfig.sHsuConfig.bEOF = 8;
+    s_ConfigNXP_HSUART.sConfig.sHsuConfig.bStopBits = 1;
+    s_ConfigNXP_HSUART.sConfig.sHsuConfig.bDummyBytes = 1;
+    s_ConfigNXP_HSUART.eBufferType = E_BUFFER_FORMAT_FREE;
+    s_ConfigNXP_HSUART.bShortFrameLen = 0;
+    s_ConfigNXP_HSUART.bStoreErrData = 0;
+    s_ConfigNXP_HSUART.bHeaderSize = 0;
+    s_ConfigNXP_HSUART.bTimeout = 10000;
+
+    s_ConfigNXP_HSUART.sConfig.sHsuConfig.bBaudRate = E_HSU_BAUDRATE_115_2K;
+
+    phhalHif_Init(&s_ConfigNXP_HSUART, (pphhalHif_Callback_t)&Erreur_Init_UART_Interrupt);
+    phUser_Wait(100);
+
+    msg8_in = 0;
+    phhalHif_InitRxBuffer(0, len_max, (uint32_t *)&rxbuf.buf8, (pphhalHif_Callback_t)&myrx);
+    check_uart();
+}
+
+// phuc vu nhat ki
+
+extern void init_i2c(void)
+{
+
+    phhalI2CM_Init(8, 4, 1000, 4);
+    phhalI2CM_Config(244, 0, E_I2CM_7BIT_ADDR_MODE);
+}
+
+// xu ly khi co cham the
+phStatus_t phExMfCrypto_MfDfCrypto_Auth(phacDiscLoop_Sw_DataParams_t *psDiscLoopParams)
+{
+    phStatus_t status;
+    uint16_t wKeyNo = 0x00;
+    uint16_t wKeyVer = 0x00;
+    // uint8_t bDivLen = 0x00;
+    uint8_t *bRxDaTa;
+    uint16_t wRxLength = 0x00;
+
+    uint8_t bApplication[3] = {0x00, 0x00, 0x00};
+
+    /* variables used by the KeyStore component */
+    uint16_t wKeyStoreKeyType = 0x00;
+    phKeyStore_Sw_KeyEntry_t pKeyEntries[PH_EXMFCRYPTO_MIFAREDESFIRE_NUMBER_OF_KEYENTRIES];
+    uint16_t wNoOfKeyEntries = PH_EXMFCRYPTO_MIFAREDESFIRE_NUMBER_OF_KEYENTRIES;
+    phKeyStore_Sw_KeyVersionPair_t pKeyVersionPairs[PH_EXMFCRYPTO_MIFAREDESFIRE_NUMBER_OF_KEYVERSIONPAIRS *
+                                                    PH_EXMFCRYPTO_MIFAREDESFIRE_NUMBER_OF_KEYENTRIES];
+    uint16_t wNoOfKeyVersionPairs = PH_EXMFCRYPTO_MIFAREDESFIRE_NUMBER_OF_KEYVERSIONPAIRS;
+    phKeyStore_Sw_KUCEntry_t pKUCEntries[PH_EXMFCRYPTO_MIFAREDESFIRE_NUMBER_OF_KUCENTRIES];
+    uint16_t wNoOfKUCEntries = PH_EXMFCRYPTO_MIFAREDESFIRE_NUMBER_OF_KUCENTRIES;
+
+    phhalSysSer_GetDieID(0x01, pDieID);
+
+    if (cmd == IDLE)
+    {
+        cmd = RD;
+    }
+    do
+    {
+        status = phpalMifare_Sw_Init(&spalMifare,
+                                     sizeof(spalMifare),
+                                     psDiscLoopParams->pHalDataParams,
+                                     psDiscLoopParams->pPal14443p4DataParams);
+        if (status != PH_ERR_SUCCESS)
+        {
+            //				thanhnt- neu vao day ko lam j ca
+            break;
+        }
+
+        /** Mifare key store init */
+        status = phKeyStore_Sw_Init(&sKeyStore,
+                                    sizeof(sKeyStore),
+                                    pKeyEntries,
+                                    wNoOfKeyEntries,
+                                    pKeyVersionPairs,
+                                    wNoOfKeyVersionPairs,
+                                    pKUCEntries,
+                                    wNoOfKUCEntries);
+
+        if (status != PH_ERR_SUCCESS)
+        {
+            //				thanhnt- neu vao day ko lam j ca
+            break;
+        }
+
+        /** CryptoSym init */
+        status = phCryptoSym_Sw_Init(&sCryptoSym,
+                                     sizeof(sCryptoSym),
+                                     (phKeyStore_Sw_DataParams_t *)(&sKeyStore));
+
+        if (status != PH_ERR_SUCCESS)
+        {
+            //				thanhnt- neu vao day ko lam j ca
+            break;
+        }
+
+        status = phCryptoSym_Sw_Init(&sCryptoSymRnd,
+                                     sizeof(sCryptoSymRnd),
+                                     (phKeyStore_Sw_DataParams_t *)(&sKeyStore));
+
+        if (status != PH_ERR_SUCCESS)
+        {
+            //				thanhnt- neu vao day ko lam j ca
+            break;
+        }
+
+        /** CryptoRng init */
+        status = phCryptoRng_Sw_Init(&sCryptoRng,
+                                     sizeof(sCryptoRng),
+                                     (phCryptoSym_Sw_DataParams_t *)(&sCryptoSymRnd));
+
+        if (status != PH_ERR_SUCCESS)
+        {
+            //				thanhnt- neu vao day ko lam j ca
+            break;
+        }
+
+        /** Mifare Desfire Al init  */
+        status = phalMfdf_Sw_Init(&salMfdf,
+                                  sizeof(salMfdf),
+                                  &spalMifare,
+                                  &sKeyStore,
+                                  &sCryptoSym,
+                                  &sCryptoRng,
+                                  psDiscLoopParams->pHalDataParams);
+
+        if (status != PH_ERR_SUCCESS)
+        {
+            //				thanhnt- neu vao day ko lam j ca
+            break;
+        }
+
+        status = phpalI14443p4_SetConfig(psDiscLoopParams->pPal14443p4DataParams, PHPAL_I14443P4_CONFIG_FWI,
+                                         ((phpalI14443p4a_Sw_DataParams_t *)(psDiscLoopParams->pPal1443p4aDataParams))->bFwi);
+        if (status != PH_ERR_SUCCESS)
+        {
+            //				thanhnt- neu vao day ko lam j ca
+            break;
+        }
+
+        status = phpalI14443p4_SetConfig(psDiscLoopParams->pPal14443p4DataParams, PHPAL_I14443P4_CONFIG_CID,
+                                         ((phpalI14443p4a_Sw_DataParams_t *)(psDiscLoopParams->pPal1443p4aDataParams))->bCid);
+        if (status != PH_ERR_SUCCESS)
+        {
+            //				thanhnt- neu vao day ko lam j ca
+            break;
+        }
+        status = phpalI14443p4_SetConfig(psDiscLoopParams->pPal14443p4DataParams, PHPAL_I14443P4_CONFIG_FSI,
+                                         ((((uint16_t)psDiscLoopParams->sTypeATargetInfo.sTypeA_I3P4.bFsdi) << 8) |
+                                          ((phpalI14443p4a_Sw_DataParams_t *)(psDiscLoopParams->pPal1443p4aDataParams))->bFsci));
+        if (status != PH_ERR_SUCCESS)
+        {
+            //				thanhnt- neu vao day ko lam j ca
+            break;
+        }
+        /** Perform key storage */
+        decodekey(k1);
+        wKeyNo = 0x01;
+        wKeyVer = 0x00;
+        wKeyStoreKeyType = PH_KEYSTORE_KEY_TYPE_AES128;
+        phUser_MemCpy(gkphExMfCrypto_pNewKey, kx, PH_KEYSTORE_KEY_TYPE_AES128_SIZE);
+        status = phExMfCrypto_KeySet(wKeyNo, wKeyVer, wKeyStoreKeyType, gkphExMfCrypto_pNewKey);
+
+        if (status != PH_ERR_SUCCESS)
+        {
+            //				thanhnt- neu vao day ko lam j ca
+            break;
+        }
+
+        decodekey(k2);
+        wKeyNo = 0x02;
+        wKeyVer = 0x00;
+        wKeyStoreKeyType = PH_KEYSTORE_KEY_TYPE_AES128;
+        phUser_MemCpy(gkphExMfCrypto_pNewKey, kx,
+                      PH_KEYSTORE_KEY_TYPE_AES128_SIZE);
+        status = phExMfCrypto_KeySet(wKeyNo, wKeyVer, wKeyStoreKeyType, gkphExMfCrypto_pNewKey);
+
+        if (status != PH_ERR_SUCCESS)
+        {
+            //				thanhnt- neu vao day ko lam j ca
+            break;
+        }
+
+        decodekey(k3);
+        wKeyNo = 0x03;
+        wKeyVer = 0x00;
+        wKeyStoreKeyType = PH_KEYSTORE_KEY_TYPE_AES128;
+        phUser_MemCpy(gkphExMfCrypto_pNewKey, kx,
+                      PH_KEYSTORE_KEY_TYPE_AES128_SIZE);
+        status = phExMfCrypto_KeySet(wKeyNo, wKeyVer, wKeyStoreKeyType, gkphExMfCrypto_pNewKey);
+
+        if (status != PH_ERR_SUCCESS)
+        {
+            //				thanhnt- neu vao day ko lam j ca
+            break;
+        }
+        LOG_TXT("Master Application of Desfire Card Selected, \n");
+        uID[0] = psDiscLoopParams->sTypeATargetInfo.aTypeA_I3P3[0].aUid[0];
+        uID[1] = psDiscLoopParams->sTypeATargetInfo.aTypeA_I3P3[0].aUid[1];
+        uID[2] = psDiscLoopParams->sTypeATargetInfo.aTypeA_I3P3[0].aUid[2];
+        uID[3] = psDiscLoopParams->sTypeATargetInfo.aTypeA_I3P3[0].aUid[3];
+        uID[4] = psDiscLoopParams->sTypeATargetInfo.aTypeA_I3P3[0].aUid[4];
+        uID[5] = psDiscLoopParams->sTypeATargetInfo.aTypeA_I3P3[0].aUid[5];
+        uID[6] = psDiscLoopParams->sTypeATargetInfo.aTypeA_I3P3[0].aUid[6];
+        chuyenchuuid();
+        phUser_MemCpy(bApplication, ViVimass, 0x03); // thay doi de tao moi ung dung
+        /** Select A515A5 Application if not present create one. */
+        status = phalMfdf_SelectApplication(&salMfdf,
+                                            bApplication);
+
+        if (status != PH_ERR_SUCCESS)
+        {
+            //				thanhnt- neu vao day ko lam j ca
+            break;
+        }
+
+        if (cmd == DocXacThuc)
+        {
+            HamDocXacThuc();
+            break;
+        }
+        if (cmd == RD)
+        {
+            // bat dau cham the de gui du lieu len may tinh
+            dangthuchienlenh = 0;
+            DocVaGuiLenMayTinh();
+            break;
+        }
+
+        if (cmd == LenhTongHop)
+        {
+            HamLenhTonghop();
+            break;
+        }
+        if (cmd == ghivantay)
+        {
+            ghitieptuc();
+            cmd = cholenh;
+        }
+
+    } while (0);
+}
+//
+void KiemTraViTriLuuVanTay(void)
+{
+    decodekey(k6);
+    uint16_t wKeyNo = 0x02;
+    uint16_t wKeyVer = 0x00;
+    uint16_t wKeyStoreKeyType = PH_KEYSTORE_KEY_TYPE_AES128;
+    phUser_MemCpy(gkphExMfCrypto_pNewKey, kx, PH_KEYSTORE_KEY_TYPE_AES128_SIZE);
+    status = phExMfCrypto_KeySet(wKeyNo, wKeyVer, wKeyStoreKeyType, gkphExMfCrypto_pNewKey);
+    if (status != PH_ERR_SUCCESS)
+    {
+        return;
+    }
+    else
+    {
+        uint8_t docf6 = 1;
+        status = phalMfdf_AuthenticateAES(&salMfdf,
+                                          PHAL_MFDF_NO_DIVERSIFICATION,
+                                          0x02,
+                                          0x00,
+                                          0x06,
+                                          NULL,
+                                          0x00);
+        if (status != PH_ERR_SUCCESS)
+        {
+            xacthucfileloi();
+            return;
+        }
+        else
+        {
+            Lenh116[0] = '!';
+            Lenh116[1] = '^';
+            Lenh116[2] = '7';
+
+            uint8_t bReadLen116[3] = {0x0C, 0x0, 0x0};
+            uint8_t pOffset116[3] = {0, 0, 0};
+
+            status = phalMfdf_ReadData(&salMfdf,
+                                       PHAL_MFDF_COMMUNICATION_ENC,
+                                       0x06,
+                                       pOffset116,
+                                       bReadLen116,
+                                       &bRxDaTa,
+                                       &wRxLength);
+
+            if (status != PH_ERR_SUCCESS)
+            {
+                docfileloi();
+                return;
+            }
+            else
+            {
+
+                for (int i = 0; i < 12; i++)
+                {
+                    Lenh116[i + 3] = bRxDaTa[i];
+                }
+            }
+            Lenh116[15] = '#';
+
+            phhalHif_Transmit((uint8_t *)&Lenh116, 16, (pphhalHif_Callback_t)&ext_SetTxBufferEmptyInterrupt);
+            phUser_Wait(200000);
+        }
+    }
+}
+//
+void DocVaGuiLenMayTinh(void)
+{
+
+    checksumdata02 = checksumdata1 = checksumtien = checksummatkhau = checksumdata01 = checksumlogtien = checksumdata03 = checksumdata04 = 0;
+
+    // xac thuc, doc du lieu de gui ra may tinh và hien thi 2 trang co ban
+    status = phalMfdf_AuthenticateAES(&salMfdf,
+                                      PHAL_MFDF_NO_DIVERSIFICATION,
+                                      0x01,
+                                      0x00,
+                                      0x01,
+                                      NULL,
+                                      0x00);
+    if (status != PH_ERR_SUCCESS)
+    {
+        return;
+    }
+    else
+    {
+        uint8_t Offset1[3] = {0x00, 0x00, 0x00};
+        uint8_t bReadLen1[3] = {0x50, 0x00, 0x00};
+        status = phalMfdf_ReadData(&salMfdf,
+                                   PHAL_MFDF_COMMUNICATION_ENC,
+                                   0x01,
+                                   Offset1,
+                                   bReadLen1,
+                                   &bRxDaTa,
+                                   &wRxLength);
+        if (status != PH_ERR_SUCCESS)
+        {
+            return;
+        }
+        else
+        {
+
+            for (i = 0; i < 80; i++)
+            {
+                checksumdata01 += bRxDaTa[i];
+                if (bRxDaTa[i] == 0)
+                {
+                    bRxDaTa[i] = 32;
+                }
+            }
+            for (i = 0; i < 7; i++)
+            {
+                vIDHienTai[i] = bRxDaTa[i];
+                dulieuthogntinthe[i] = bRxDaTa[i];
+            }
+            for (i = 0; i < 6; i++)
+            {
+                MatKhauHienTai[i] = bRxDaTa[i + 7];
+                checksummatkhau += bRxDaTa[i + 7];
+            }
+            for (i = 0; i < 20; i++)
+            {
+                HoTenHienTai[i] = bRxDaTa[i + 13];
+                dulieuthogntinthe[i + 7] = bRxDaTa[i + 13];
+            }
+
+            for (i = 0; i < 12; i++)
+            {
+                CCCDHienTai[i] = bRxDaTa[i + 33];
+                dulieuthogntinthe[i + 27] = bRxDaTa[i + 33];
+            }
+            for (i = 0; i < 15; i++)
+            {
+                SoTheBHYT[i] = bRxDaTa[i + 45];
+
+                dulieuthogntinthe[i + 39] = bRxDaTa[i + 45];
+            }
+            for (i = 0; i < 20; i++)
+            {
+                TaiKhoanHienTai[i] = bRxDaTa[i + 60];
+                dulieuthogntinthe[i + 54] = bRxDaTa[i + 60];
+            }
+            uint8_t Offset[3] = {0x50, 0x00, 0x00};
+            uint8_t bReadLen[3] = {0x00, 0x00, 0x00};
+            status = phalMfdf_ReadData(&salMfdf,
+                                       PHAL_MFDF_COMMUNICATION_ENC,
+                                       0x01,
+                                       Offset,
+                                       bReadLen,
+                                       &bRxDaTa,
+                                       &wRxLength);
+
+            if (status != PH_ERR_SUCCESS)
+            {
+                return;
+            }
+            else
+            {
+
+                for (i = 0; i < 57; i++)
+                {
+                    checksumdata01 += bRxDaTa[i + 63];
+                }
+                for (i = 0; i < 120; i++)
+                {
+                    if (bRxDaTa[i] == 0)
+                    {
+                        bRxDaTa[i] = 32;
+                    }
+                }
+                for (i = 0; i < 63; i++)
+                {
+
+                    LogTaiChinh[i] = bRxDaTa[i];
+                    dulieuthogntinthe[i + 74] = bRxDaTa[i];
+
+                    checksumlogtien += bRxDaTa[i];
+                }
+                for (i = 0; i < 10; i++)
+                {
+                    HanMucThe[i] = bRxDaTa[i + 63];
+                    dulieuthogntinthe[i + 137] = bRxDaTa[i + 63];
+                }
+                for (i = 0; i < 20; i++)
+                {
+                    MaDonViMaCaNhan[i] = bRxDaTa[i + 83];
+                    dulieuthogntinthe[i + 147] = bRxDaTa[i + 83];
+                }
+                for (i = 0; i < 10; i++)
+                {
+                    DienThoai[i] = bRxDaTa[i + 103];
+                    dulieuthogntinthe[i + 167] = bRxDaTa[i + 103];
+                }
+                GioiTinh[0] = bRxDaTa[113];
+                dulieuthogntinthe[227] = bRxDaTa[113];
+                for (i = 0; i < 6; i++)
+                {
+                    NgayCapCMT[i] = bRxDaTa[i + 114];
+                    dulieuthogntinthe[i + 177] = bRxDaTa[i + 114];
+                }
+                status = phalMfdf_GetValue(&salMfdf,
+                                           PHAL_MFDF_COMMUNICATION_ENC,
+                                           0x02,
+                                           pValue);
+                int tong = pValue[0] + pValue[1] * 256 + pValue[2] * 65536 + pValue[3] * 16777216;
+                t1 = (tong / 1000000000) % 10;
+                t2 = (tong / 100000000) % 10;
+                t3 = (tong / 10000000) % 10;
+                t4 = (tong / 1000000) % 10;
+                t5 = (tong / 100000) % 10;
+                t6 = (tong / 10000) % 10;
+                t7 = (tong / 1000) % 10;
+                t8 = (tong / 100) % 10;
+                t9 = (tong / 10) % 10;
+                t10 = tong % 10;
+
+                SoTienHienTai[0] = t1 + 48;
+                SoTienHienTai[1] = 32;
+                SoTienHienTai[2] = t2 + 48;
+                SoTienHienTai[3] = t3 + 48;
+                SoTienHienTai[4] = t4 + 48;
+                SoTienHienTai[5] = 32;
+                SoTienHienTai[6] = t5 + 48;
+                SoTienHienTai[7] = t6 + 48;
+                SoTienHienTai[8] = t7 + 48;
+                SoTienHienTai[9] = 32;
+                SoTienHienTai[10] = t8 + 48;
+                SoTienHienTai[11] = t9 + 48;
+                SoTienHienTai[12] = t10 + 48;
+                for (i = 0; i < 13; i++)
+                {
+                    if ((SoTienHienTai[i] == '0' && (SoTienHienTai[i + 1] == '0' || SoTienHienTai[i + 1] == 32)) || (SoTienHienTai[i] == 32 && (SoTienHienTai[i + 1] == '0' || SoTienHienTai[i + 1] == 32)) || (SoTienHienTai[i] == '0' && (SoTienHienTai[i + 1] == '1' || SoTienHienTai[i + 1] == '2' || SoTienHienTai[i + 1] == '3' || SoTienHienTai[i + 1] == '4' || SoTienHienTai[i + 1] == '5' || SoTienHienTai[i + 1] == '6' || SoTienHienTai[i + 1] == '7' || SoTienHienTai[i + 1] == '8' || SoTienHienTai[i + 1] == '9')))
+                    {
+                        SoTienHienTai[i] = 32;
+                    }
+
+                    dulieuthogntinthe[i + 228] = SoTienHienTai[i];
+                }
+                uint8_t Offset1[3] = {0x00, 0x00, 0x00};
+                uint8_t bReadLen1[3] = {0x6F, 0x00, 0x00};
+                status = phalMfdf_ReadData(&salMfdf,
+                                           PHAL_MFDF_COMMUNICATION_ENC,
+                                           0x03,
+                                           Offset1,
+                                           bReadLen1,
+                                           &bRxDaTa,
+                                           &wRxLength);
+
+                if (status != PH_ERR_SUCCESS)
+                {
+                    return;
+                }
+                else
+                {
+                    for (i = 0; i < 111; i++)
+                    {
+
+                        if (bRxDaTa[i] == 0)
+                            bRxDaTa[i] = 32;
+                        checksumdata02 += bRxDaTa[i];
+                    }
+                    for (i = 0; i < 8; i++)
+                    {
+                        NgaySinh[i] = bRxDaTa[i];
+                        dulieuthogntinthe[i + 183] = bRxDaTa[i];
+                    }
+                    for (i = 0; i < 3; i++)
+                    {
+                        QuocTich[i] = bRxDaTa[i + 8];
+                        dulieuthogntinthe[i + 241] = bRxDaTa[i + 8];
+                    }
+                    for (i = 0; i < 54; i++)
+                    {
+                        DiaChi[i] = bRxDaTa[i + 11];
+                    }
+                    for (i = 0; i < 36; i++)
+                    {
+                        Email[i] = bRxDaTa[i + 65];
+                        dulieuthogntinthe[i + 191] = bRxDaTa[i + 65];
+                    }
+                    uint8_t Offset2[3] = {0x6F, 0x00, 0x00};
+                    uint8_t bReadLen2[3] = {0x00, 0x00, 0x00};
+                    status = phalMfdf_ReadData(&salMfdf,
+                                               PHAL_MFDF_COMMUNICATION_ENC,
+                                               0x03,
+                                               Offset2,
+                                               bReadLen2,
+                                               &bRxDaTa,
+                                               &wRxLength);
+                    if (status != PH_ERR_SUCCESS)
+                    {
+                        return;
+                    }
+                    else
+                    {
+                        for (i = 0; i < 89; i++)
+                        {
+                            if (bRxDaTa[i] == 0)
+                                bRxDaTa[i] = 32;
+                            checksumdata02 += bRxDaTa[i];
+                        }
+
+                        checksumtien += t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10 + (48 * 10);
+                        if (trangthaixemthongtinthe == 1)
+                        {
+                            XemThongTinThe();
+                        }
+                        else
+                        {
+                            Guiuidvidlenmaytinh();
+                        }
+                    }
+                }
+                return;
+            }
+        }
+    }
+}
+void HamLenhTonghop(void)
+{
+    // dua dong ho ve 0, khong dem
+    timeout5s = 0;
+    timeout10s = 0;
+    timeout20s = 0;
+
+    // thuc hien lenh
+    if (trangthaixacthuc == 1)
+    {
+        LenhTongHopDai();
+    }
+    else
+    {
+        DocVaGuiLenMayTinh();
+        //        KiemTraViTriLuuVanTay();
+    }
+}
+void LenhTongHopDai(void)
+{
+    timeout10s = 0;
+    timeout20s = 0;
+    timeout5s = 0;
+    dangthuchienlenh = 0;
+
+    if (dangthuchienlenh == 0)
+    {
+        dangthuchienlenh = 1;
+
+        //				=========================dangthuchienlenh==========================================================
+
+        if (m109 == 1)
+        {
+            LenhGhiThongTinCoDinh();
+            ghi = 0;
+        }
+        if (m110 == 1)
+        {
+
+            uint8_t k4[64] = "8682565246486082844890604664504856806484906460568646505690586258";
+            decodekey(k4);
+            uint16_t wKeyNo = 0x02;
+            uint16_t wKeyVer = 0x00;
+            uint16_t wKeyStoreKeyType = PH_KEYSTORE_KEY_TYPE_AES128;
+            phUser_MemCpy(gkphExMfCrypto_pNewKey, kx,
+                          PH_KEYSTORE_KEY_TYPE_AES128_SIZE);
+            status = phExMfCrypto_KeySet(wKeyNo, wKeyVer, wKeyStoreKeyType, gkphExMfCrypto_pNewKey);
+            if (status != PH_ERR_SUCCESS)
+            {
+                uint8_t loiloi[] = "!loikhoa4#";
+                phhalHif_Transmit((uint8_t *)&loiloi, 10, (pphhalHif_Callback_t)&ext_SetTxBufferEmptyInterrupt);
+                phUser_Wait(5000);
+                return;
+            }
+            else
+            {
+                LenhGhiThongTinData2();
+            }
+            ghi = 0;
+        }
+        if (m111 == 1)
+        {
+            uint8_t k5[64] = "5856629062908688468650565282888686525886588248544860646088908854";
+            decodekey(k5);
+            uint16_t wKeyNo = 0x02;
+            uint16_t wKeyVer = 0x00;
+            uint16_t wKeyStoreKeyType = PH_KEYSTORE_KEY_TYPE_AES128;
+            phUser_MemCpy(gkphExMfCrypto_pNewKey, kx,
+                          PH_KEYSTORE_KEY_TYPE_AES128_SIZE);
+            status = phExMfCrypto_KeySet(wKeyNo, wKeyVer, wKeyStoreKeyType, gkphExMfCrypto_pNewKey);
+            if (status != PH_ERR_SUCCESS)
+            {
+                return;
+            }
+            else
+            {
+                LenhGhiThongTinData4();
+            }
+            ghi = 0;
+        }
+
+        if (m108 == 1)
+        {
+            CapNhatTien();
+            ghi = 0;
+        }
+        if (m113 == 1)
+        {
+
+            decodekey(k8);
+            uint16_t wKeyNo = 0x02;
+            uint16_t wKeyVer = 0x00;
+            uint16_t wKeyStoreKeyType = PH_KEYSTORE_KEY_TYPE_AES128;
+            phUser_MemCpy(gkphExMfCrypto_pNewKey, kx, PH_KEYSTORE_KEY_TYPE_AES128_SIZE);
+            status = phExMfCrypto_KeySet(wKeyNo, wKeyVer, wKeyStoreKeyType, gkphExMfCrypto_pNewKey);
+            if (status != PH_ERR_SUCCESS)
+            {
+                return;
+            }
+            else
+            {
+                ghifile_06();
+            }
+        }
+        if (m114 == 1)
+        {
+            //
+        }
+        if (ghi == 0)
+        {
+            cmd = cholenh;
+            Ghi_ketthuc();
+            DocTT_ok();
+            moi_tap_the();
+        }
+
+        dangthuchienlenh = 0;
+    }
+    return;
+}
+void LenhGhiThongTinCoDinh(void)
+{
+
+    status = phalMfdf_AuthenticateAES(&salMfdf,
+                                      PHAL_MFDF_NO_DIVERSIFICATION,
+                                      0x02,
+                                      0x00,
+                                      0x02,
+                                      NULL,
+                                      0x00);
+
+    if (status != PH_ERR_SUCCESS)
+    {
+        return;
+    }
+    else
+    {
+        for (i = 0; i < datalen1; i++)
+        {
+            DuLieuDuaVao[i] = Lenh9[i + 6];
+        }
+
+        bFileNo = 0x01;
+        SoLuongKyTu[0] = datalen1;
+        SoLuongKyTu[1] = 0;
+        SoLuongKyTu[2] = 0;
+
+        status = phalMfdf_WriteData(&salMfdf,
+                                    PHAL_MFDF_COMMUNICATION_ENC,
+                                    bFileNo,
+                                    pOffset1,
+                                    DuLieuDuaVao,
+                                    SoLuongKyTu);
+        status = phalMfdf_CommitTransaction(&salMfdf);
+
+        if (status == PH_ERR_SUCCESS)
+        {
+            char maloi[3] = "109";
+            Ghi_ThanhCong(maloi);
+        }
+        else
+        {
+            return;
+        }
+    }
+}
+void CapNhatTien(void)
+{
+    status = phalMfdf_AuthenticateAES(&salMfdf,
+                                      PHAL_MFDF_NO_DIVERSIFICATION,
+                                      0x03,
+                                      0x00,
+                                      0x03,
+                                      NULL,
+                                      0x00);
+    if (status != PH_ERR_SUCCESS)
+    {
+        return;
+    }
+    else
+    {
+        status = phalMfdf_GetValue(&salMfdf,
+                                   PHAL_MFDF_COMMUNICATION_ENC,
+                                   0x02,
+                                   pValue);
+        if (status != PH_ERR_SUCCESS)
+        {
+            return;
+        }
+        else
+        {
+            int tong1 = pValue[0] + pValue[1] * 256 + pValue[2] * 65536 + pValue[3] * 16777216;
+
+            for (i = 0; i < 10; i++)
+            {
+                GhiNhoTien[i] = Lenh8[i + 4];
+            }
+            for (i = 0; i < 10; i++)
+            {
+                GhiNhoTien[i] = GhiNhoTien[i] - 48;
+            }
+            int tong2 = GhiNhoTien[0] * 1000000000 + GhiNhoTien[1] * 100000000 + GhiNhoTien[2] * 10000000 + GhiNhoTien[3] * 1000000 + GhiNhoTien[4] * 100000 + GhiNhoTien[5] * 10000 + GhiNhoTien[6] * 1000 + GhiNhoTien[7] * 100 + GhiNhoTien[8] * 10 + GhiNhoTien[9];
+            int tongtienvao = tong2;
+            status = phalMfdf_Debit(&salMfdf,
+                                    PHAL_MFDF_COMMUNICATION_ENC,
+                                    0x02,
+                                    pValue);
+            if (status != PH_ERR_SUCCESS)
+            {
+                return;
+            }
+            else
+            {
+                pValue[3] = tong2 / 16777216;
+                tong2 = tong2 - pValue[3] * 16777216;
+                pValue[2] = tong2 / 65536;
+                tong2 = tong2 - pValue[2] * 65536;
+                pValue[1] = tong2 / 256;
+                pValue[0] = tong2 - pValue[2] * 256;
+                status = phalMfdf_Credit(&salMfdf,
+                                         PHAL_MFDF_COMMUNICATION_ENC,
+                                         0x02,
+                                         pValue);
+                status = phalMfdf_CommitTransaction(&salMfdf);
+                char maloi[3] = "108";
+                if (status == PH_ERR_SUCCESS)
+                {
+
+                    Ghi_ThanhCong(maloi);
+                    return;
+                }
+                else
+                {
+                    Ghi_Loi(maloi);
+                }
+            }
+        }
+    }
+}
+void LenhGhiThongTinData4(void)
+{
+
+    status = phalMfdf_AuthenticateAES(&salMfdf,
+                                      PHAL_MFDF_NO_DIVERSIFICATION,
+                                      0x02,
+                                      0x00,
+                                      0x04,
+                                      NULL,
+                                      0x00);
+    if (status != PH_ERR_SUCCESS)
+    {
+    }
+    else
+    {
+        for (i = 0; i < datalen4; i++)
+        {
+            DuLieuDuaVao[i] = Lenh11[i + 6];
+        }
+
+        bFileNo = 0x04;
+        SoLuongKyTu[0] = datalen4;
+        SoLuongKyTu[1] = 0;
+        SoLuongKyTu[2] = 0;
+
+        status = phalMfdf_WriteData(&salMfdf,
+                                    PHAL_MFDF_COMMUNICATION_ENC,
+                                    bFileNo,
+                                    pOffset4,
+                                    DuLieuDuaVao,
+                                    SoLuongKyTu);
+        char maloi[3] = "111";
+        if (status == PH_ERR_SUCCESS)
+        {
+            Ghi_ThanhCong(maloi);
+        }
+        else
+        {
+            //			Ghi_Loi(maloi);
+        }
+    }
+    return;
+}
+void LenhGhiThongTinData2(void)
+{
+    phUser_Wait(500);
+    status = phalMfdf_AuthenticateAES(&salMfdf,
+                                      PHAL_MFDF_NO_DIVERSIFICATION,
+                                      0x02,
+                                      0x00,
+                                      0x04,
+                                      NULL,
+                                      0x00);
+    if (status != PH_ERR_SUCCESS)
+    {
+        return;
+    }
+    else
+    {
+        for (i = 0; i < datalen2; i++)
+        {
+            DuLieuDuaVao[i] = Lenh10[i + 6];
+        }
+
+        bFileNo = 0x03;
+        SoLuongKyTu[0] = datalen2;
+        SoLuongKyTu[1] = 0;
+        SoLuongKyTu[2] = 0;
+
+        status = phalMfdf_WriteData(&salMfdf,
+                                    PHAL_MFDF_COMMUNICATION_ENC,
+                                    bFileNo,
+                                    pOffset2,
+                                    DuLieuDuaVao,
+                                    SoLuongKyTu);
+        status = phalMfdf_CommitTransaction(&salMfdf);
+        if (status != PH_ERR_SUCCESS)
+        {
+            return;
+        }
+        char maloi[3] = "110";
+        if (status == PH_ERR_SUCCESS)
+        {
+            Ghi_ThanhCong(maloi);
+            m110 = 0;
+        }
+        else
+        {
+
+            return;
+        }
+    }
+    return;
+}
+void XoaLenhTuMayTinh(void)
+{
+
+    return;
+}
+
+void Cho_6s(void)
+{
+    phUser_Wait(6000000);
+}
+void Cho_4s(void)
+{
+    phUser_Wait(4000000);
+}
+void Cho_2s(void)
+{
+    phUser_Wait(2000000);
+}
+void Cho_3s(void)
+{
+    phUser_Wait(3000000);
+}
+void Xoa_Dl_Gui(void)
+{
+    for (i = 0; i < 80; i++)
+    {
+        DuLieuGuiMayTinh[i] = " ";
+    }
+}
+void moi_tap_the(void)
+{
+    Cho_2s();
+    cmd = IDLE;
+    trovebandau = 0;
+    start_ok = 0;
+}
+void chuyenchuuid()
+{
+    uint8_t hexx[16] = "0123456789ABCDEF";
+
+    for (i = 0; i < 14; i += 2)
+    {
+        Uidbangchu[i] = hexx[uID[i / 2] / 16];
+        Uidbangchu[i + 1] = hexx[uID[i / 2] % 16];
+    }
+}
+
+void layidthietbi()
+{
+
+    uint8_t hexx[16] = "0123456789ABCDEF";
+
+    for (i = 0; i < 32; i += 2)
+    {
+        mathietbibangchu[i] = hexx[pDieID[i / 2] / 16];
+        mathietbibangchu[i + 1] = hexx[pDieID[i / 2] % 16];
+    }
+}
+
+void decodekey(char key[])
+{
+    for (i = 0; i < 64; i++)
+    {
+        k[0] = key[i];
+        k[1] = key[i + 1];
+        dec = atoi(k);
+        j = i / 2;
+        dec = dec / 2 + 25;
+        k11[j] = dec;
+        i += 1;
+    }
+    for (i = 0; i < 32; i++)
+    {
+        k[0] = k11[i];
+        k[1] = k11[i + 1];
+        l = i / 2;
+        kx[l] = hexadecimalToDecimal(k);
+        i += 1;
+    }
+}
+void LayByteDau(int so)
+{
+    int so1 = so / 16;
+    textoffset = 32;
+    if (so1 == 1)
+    {
+        textoffset = '1';
+    }
+    else if (so1 == 2)
+    {
+        textoffset = '2';
+    }
+    else if (so1 == 3)
+    {
+        textoffset = '3';
+    }
+    else if (so1 == 4)
+    {
+        textoffset = '4';
+    }
+    else if (so1 == 5)
+    {
+        textoffset = '5';
+    }
+    else if (so1 == 6)
+    {
+        textoffset = '6';
+    }
+    else if (so1 == 7)
+    {
+        textoffset = '7';
+    }
+    else if (so1 == 8)
+    {
+        textoffset = '8';
+    }
+    else if (so1 == 9)
+    {
+        textoffset = '9';
+    }
+    else if (so1 == 10)
+    {
+        textoffset = 'A';
+    }
+    else if (so1 == 11)
+    {
+        textoffset = 'B';
+    }
+    else if (so1 == 12)
+    {
+        textoffset = 'C';
+    }
+    else if (so1 == 13)
+    {
+        textoffset = 'D';
+    }
+    else if (so1 == 14)
+    {
+        textoffset = 'E';
+    }
+    else if (so1 == 15)
+    {
+        textoffset = 'F';
+    }
+    else if (so1 == 0)
+    {
+        textoffset = '0';
+    }
+}
+void LayBytecuoi(int so)
+{
+    int so1 = so % 16;
+    textoffset2 = 32;
+    if (so1 == 1)
+    {
+        textoffset2 = '1';
+    }
+    else if (so1 == 2)
+    {
+        textoffset2 = '2';
+    }
+    else if (so1 == 3)
+    {
+        textoffset2 = '3';
+    }
+    else if (so1 == 4)
+    {
+        textoffset2 = '4';
+    }
+    else if (so1 == 5)
+    {
+        textoffset2 = '5';
+    }
+    else if (so1 == 6)
+    {
+        textoffset2 = '6';
+    }
+    else if (so1 == 7)
+    {
+        textoffset2 = '7';
+    }
+    else if (so1 == 8)
+    {
+        textoffset2 = '8';
+    }
+    else if (so1 == 9)
+    {
+        textoffset2 = '9';
+    }
+    else if (so1 == 10)
+    {
+        textoffset2 = 'A';
+    }
+    else if (so1 == 11)
+    {
+        textoffset2 = 'B';
+    }
+    else if (so1 == 12)
+    {
+        textoffset2 = 'C';
+    }
+    else if (so1 == 13)
+    {
+        textoffset2 = 'D';
+    }
+    else if (so1 == 14)
+    {
+        textoffset2 = 'E';
+    }
+    else if (so1 == 15)
+    {
+        textoffset2 = 'F';
+    }
+    else if (so1 == 0)
+    {
+        textoffset2 = '0';
+    }
+}
+int hexadecimalToDecimal(char hexVal[])
+{
+    int len = strlen(hexVal);
+    int base = 1;
+    int dec_val = 0;
+    for (int i = len - 1; i >= 0; i--)
+    {
+        if (hexVal[i] >= '0' && hexVal[i] <= '9')
+        {
+            dec_val += (hexVal[i] - 48) * base;
+            base = base * 16;
+        }
+        else if (hexVal[i] >= 'A' && hexVal[i] <= 'F')
+        {
+            dec_val += (hexVal[i] - 55) * base;
+            base = base * 16;
+        }
+    }
+    return dec_val;
+}
+void Ghi_ThanhCong(char maloi[3])
+{
+    //	1cfs42_
+    tmp[0] = '!';
+    tmp[1] = '^';
+    tmp[2] = '1';
+    tmp[3] = 'c';
+    tmp[4] = 'f';
+    tmp[5] = 's';
+    tmp[6] = '4';
+    tmp[7] = '2';
+    tmp[8] = '_';
+    tmp[9] = maloi[0];
+    tmp[10] = maloi[1];
+    tmp[11] = maloi[2];
+    tmp[12] = '-';
+    for (i = 0; i < 14; i++)
+    {
+        tmp[13 + i] = Uidbangchu[i];
+    }
+    tmp[27] = '#';
+    phhalHif_Transmit((uint8_t *)&tmp, 28, (pphhalHif_Callback_t)&ext_SetTxBufferEmptyInterrupt);
+    phUser_Wait(50000);
+    return;
+}
+void Ghi_ketthuc(char maloi[3])
+{
+    // 1cfs000
+    tmp[0] = '!';
+    tmp[1] = '^';
+    tmp[2] = '1';
+    tmp[3] = 'c';
+    tmp[4] = 'f';
+    tmp[5] = 's';
+    tmp[6] = '0';
+    tmp[7] = '0';
+    tmp[8] = '0';
+    tmp[9] = '#';
+    phhalHif_Transmit((uint8_t *)&tmp, 10, (pphhalHif_Callback_t)&ext_SetTxBufferEmptyInterrupt);
+    phUser_Wait(50000);
+    return;
+}
+void Ghi_Loi(char maloi[3])
+{
+    tmp[0] = '!';
+    tmp[1] = '^';
+    tmp[2] = 'x';
+    tmp[3] = 'x';
+    tmp[4] = 'x';
+    tmp[5] = 'x';
+    tmp[6] = 'x';
+    tmp[7] = 'x';
+    tmp[8] = '_';
+    tmp[9] = maloi[0];
+    tmp[10] = maloi[1];
+    tmp[11] = maloi[2];
+    tmp[12] = '-';
+    for (i = 0; i < 14; i++)
+    {
+        tmp[13 + i] = Uidbangchu[i];
+    }
+    tmp[27] = '#';
+    phhalHif_Transmit((uint8_t *)&tmp, 28, (pphhalHif_Callback_t)&ext_SetTxBufferEmptyInterrupt);
+    phUser_Wait(50000);
+    return;
+}
+
+void LenhDocManHinhCoBan(void)
+{
+
+    // xac thuc, doc du lieu de gui ra may tinh và hien thi 2 trang co ban
+    status = phalMfdf_AuthenticateAES(&salMfdf,
+                                      PHAL_MFDF_NO_DIVERSIFICATION,
+                                      0x01,
+                                      0x00,
+                                      0x01,
+                                      NULL,
+                                      0x00);
+    if (status != PH_ERR_SUCCESS)
+    {
+        uint8_t loiloi[] = "!loi1#";
+        phhalHif_Transmit((uint8_t *)&loiloi, 28, (pphhalHif_Callback_t)&ext_SetTxBufferEmptyInterrupt);
+        phUser_Wait(5000);
+        return;
+        uint8_t Offset1[3] = {0x00, 0x00, 0x00};
+        uint8_t bReadLen1[3] = {0x50, 0x00, 0x00};
+        status = phalMfdf_ReadData(&salMfdf,
+                                   PHAL_MFDF_COMMUNICATION_ENC,
+                                   0x01,
+                                   Offset1,
+                                   bReadLen1,
+                                   &bRxDaTa,
+                                   &wRxLength);
+        if (status != PH_ERR_SUCCESS)
+        {
+            uint8_t loiloi[] = "!loi2#";
+            phhalHif_Transmit((uint8_t *)&loiloi, 28, (pphhalHif_Callback_t)&ext_SetTxBufferEmptyInterrupt);
+            phUser_Wait(5000);
+            return;
+        }
+        else
+        {
+
+            for (i = 0; i < 80; i++)
+            {
+                if (bRxDaTa[i] == 0)
+                {
+                    bRxDaTa[i] = 32;
+                }
+            }
+            for (i = 0; i < 7; i++)
+            {
+                vIDHienTai[i] = bRxDaTa[i];
+            }
+            for (i = 0; i < 6; i++)
+            {
+                MatKhauHienTai[i] = bRxDaTa[i + 7];
+                checksummatkhau += bRxDaTa[i + 7];
+            }
+            for (i = 0; i < 20; i++)
+            {
+                HoTenHienTai[i] = bRxDaTa[i + 13];
+            }
+
+            for (i = 0; i < 12; i++)
+            {
+                CCCDHienTai[i] = bRxDaTa[i + 33];
+            }
+            for (i = 0; i < 20; i++)
+            {
+                TaiKhoanHienTai[i] = bRxDaTa[i + 60];
+            }
+            uint8_t Offset[3] = {0x50, 0x00, 0x00};
+            uint8_t bReadLen[3] = {0x00, 0x00, 0x00};
+            status = phalMfdf_ReadData(&salMfdf,
+                                       PHAL_MFDF_COMMUNICATION_ENC,
+                                       0x01,
+                                       Offset,
+                                       bReadLen,
+                                       &bRxDaTa,
+                                       &wRxLength);
+
+            if (status != PH_ERR_SUCCESS)
+            {
+                uint8_t loiloi[] = "!loi3#";
+                phhalHif_Transmit((uint8_t *)&loiloi, 28, (pphhalHif_Callback_t)&ext_SetTxBufferEmptyInterrupt);
+                phUser_Wait(5000);
+                return;
+            }
+            else
+            {
+                for (i = 0; i < 120; i++)
+                {
+                    if (bRxDaTa[i] == 0)
+                    {
+                        bRxDaTa[i] = 32;
+                    }
+                }
+                for (i = 0; i < 63; i++)
+                {
+                    LogTaiChinh[i] = bRxDaTa[i];
+                }
+                for (i = 0; i < 10; i++)
+                {
+                    HanMucThe[i] = bRxDaTa[i + 63];
+                }
+                for (i = 0; i < 20; i++)
+                {
+                    MaDonViMaCaNhan[i] = bRxDaTa[i + 89];
+                }
+                for (i = 0; i < 10; i++)
+                {
+                    DienThoai[i] = bRxDaTa[i + 109];
+                }
+                GioiTinh[0] = bRxDaTa[109];
+                for (i = 0; i < 6; i++)
+                {
+                    NgayCapCMT[i] = bRxDaTa[i + 110];
+                }
+
+                status = phalMfdf_GetValue(&salMfdf,
+                                           PHAL_MFDF_COMMUNICATION_ENC,
+                                           0x02,
+                                           pValue);
+
+                int tong = pValue[0] + pValue[1] * 256 + pValue[2] * 65536 + pValue[3] * 16777216;
+                t1 = (tong / 1000000000) % 10;
+                t2 = (tong / 100000000) % 10;
+                t3 = (tong / 10000000) % 10;
+                t4 = (tong / 1000000) % 10;
+                t5 = (tong / 100000) % 10;
+                t6 = (tong / 10000) % 10;
+                t7 = (tong / 1000) % 10;
+                t8 = (tong / 100) % 10;
+                t9 = (tong / 10) % 10;
+                t10 = tong % 10;
+
+                SoTienHienTai[0] = t1 + 48;
+                SoTienHienTai[1] = 32;
+                SoTienHienTai[2] = t2 + 48;
+                SoTienHienTai[3] = t3 + 48;
+                SoTienHienTai[4] = t4 + 48;
+                SoTienHienTai[5] = 32;
+                SoTienHienTai[6] = t5 + 48;
+                SoTienHienTai[7] = t6 + 48;
+                SoTienHienTai[8] = t7 + 48;
+                SoTienHienTai[9] = 32;
+                SoTienHienTai[10] = t8 + 48;
+                SoTienHienTai[11] = t9 + 48;
+                SoTienHienTai[12] = t10 + 48;
+                for (i = 0; i < 13; i++)
+                {
+                    if ((SoTienHienTai[i] == '0' && (SoTienHienTai[i + 1] == '0' || SoTienHienTai[i + 1] == 32)) || (SoTienHienTai[i] == 32 && (SoTienHienTai[i + 1] == '0' || SoTienHienTai[i + 1] == 32)) || (SoTienHienTai[i] == '0' && (SoTienHienTai[i + 1] == '1' || SoTienHienTai[i + 1] == '2' || SoTienHienTai[i + 1] == '3' || SoTienHienTai[i + 1] == '4' || SoTienHienTai[i + 1] == '5' || SoTienHienTai[i + 1] == '6' || SoTienHienTai[i + 1] == '7' || SoTienHienTai[i + 1] == '8' || SoTienHienTai[i + 1] == '9')))
+                    {
+                        SoTienHienTai[i] = 32;
+                    }
+                    else
+                    {
+                        break;
+                    }
+                }
+
+                uint8_t Offset1[3] = {0x00, 0x00, 0x00};
+                uint8_t bReadLen1[3] = {0x6F, 0x00, 0x00};
+                status = phalMfdf_ReadData(&salMfdf,
+                                           PHAL_MFDF_COMMUNICATION_ENC,
+                                           0x03,
+                                           Offset1,
+                                           bReadLen1,
+                                           &bRxDaTa,
+                                           &wRxLength);
+
+                if (status != PH_ERR_SUCCESS)
+                {
+                    return;
+                }
+                else
+                {
+                    for (i = 0; i < 111; i++)
+                    {
+                        if (bRxDaTa[i] == 0)
+                        {
+                            bRxDaTa[i] = 32;
+                        }
+                    }
+                    for (i = 0; i < 8; i++)
+                    {
+                        NgaySinh[i] = bRxDaTa[i];
+                    }
+                    for (i = 0; i < 54; i++)
+                    {
+                        DiaChi[i] = bRxDaTa[i + 11];
+                    }
+                    for (i = 0; i < 36; i++)
+                    {
+                        Email[i] = bRxDaTa[i + 65];
+                    }
+
+                    DocTT_ok();
+                }
+                return;
+            }
+        }
+    }
+}
+void Guiuidvidlenmaytinh()
+{
+
+    // [35]_[uid]_[tbttid]_[cks data1 khong log]_[cks tien]_[cks data2]_[vid]_[cks mat khau]_[cks log tien]_[cks log khong tien]_[hoten];
+    // 135
+    CKS = 0;
+    chuyenchuuid();
+    layidthietbi();
+
+    DuLieuGuiMayTinh[0] = '!';
+    DuLieuGuiMayTinh[1] = '^';
+    DuLieuGuiMayTinh[2] = '1';
+    DuLieuGuiMayTinh[3] = '3';
+    DuLieuGuiMayTinh[4] = '5';
+
+    DuLieuGuiMayTinh[5] = '_';
+    for (i = 0; i < 14; i++)
+    {
+        DuLieuGuiMayTinh[i + 6] = Uidbangchu[i];
+    }
+    DuLieuGuiMayTinh[20] = '_';
+
+    for (i = 0; i < 34; i++)
+    {
+        DuLieuGuiMayTinh[i + 21] = mathietbibangchu[i];
+    }
+    DuLieuGuiMayTinh[55] = '_';
+
+    DuLieuGuiMayTinh[56] = (checksumdata01 / 100000) % 10 + 48; //
+    DuLieuGuiMayTinh[57] = (checksumdata01 / 10000) % 10 + 48;
+    DuLieuGuiMayTinh[58] = (checksumdata01 / 1000) % 10 + 48;
+    DuLieuGuiMayTinh[59] = (checksumdata01 / 100) % 10 + 48;
+    DuLieuGuiMayTinh[60] = (checksumdata01 / 10) % 10 + 48;
+    DuLieuGuiMayTinh[61] = checksumdata01 % 10 + 48;
+    DuLieuGuiMayTinh[62] = '_';
+    DuLieuGuiMayTinh[63] = (checksumtien / 100000) % 10 + 48;
+    DuLieuGuiMayTinh[64] = (checksumtien / 10000) % 10 + 48;
+    DuLieuGuiMayTinh[65] = (checksumtien / 1000) % 10 + 48;
+    DuLieuGuiMayTinh[66] = (checksumtien / 100) % 10 + 48;
+    DuLieuGuiMayTinh[67] = (checksumtien / 10) % 10 + 48;
+    DuLieuGuiMayTinh[68] = checksumtien % 10 + 48;
+    DuLieuGuiMayTinh[69] = '_';
+    DuLieuGuiMayTinh[70] = (checksumdata02 / 100000) % 10 + 48;
+    DuLieuGuiMayTinh[71] = (checksumdata02 / 10000) % 10 + 48;
+    DuLieuGuiMayTinh[72] = (checksumdata02 / 1000) % 10 + 48;
+    DuLieuGuiMayTinh[73] = (checksumdata02 / 100) % 10 + 48;
+    DuLieuGuiMayTinh[74] = (checksumdata02 / 10) % 10 + 48;
+    DuLieuGuiMayTinh[75] = checksumdata02 % 10 + 48;
+    DuLieuGuiMayTinh[76] = '_';
+    for (i = 0; i < 7; i++)
+    {
+        DuLieuGuiMayTinh[i + 77] = vIDHienTai[i];
+    }
+    DuLieuGuiMayTinh[84] = '_';
+    DuLieuGuiMayTinh[85] = (checksummatkhau / 100) % 10 + 48;
+    DuLieuGuiMayTinh[86] = (checksummatkhau / 10) % 10 + 48;
+    DuLieuGuiMayTinh[87] = checksummatkhau % 10 + 48;
+    DuLieuGuiMayTinh[88] = '_';
+    DuLieuGuiMayTinh[89] = (checksumlogtien / 100000) % 10 + 48;
+    DuLieuGuiMayTinh[90] = (checksumlogtien / 10000) % 10 + 48;
+    DuLieuGuiMayTinh[91] = (checksumlogtien / 1000) % 10 + 48;
+    DuLieuGuiMayTinh[92] = (checksumlogtien / 100) % 10 + 48;
+    DuLieuGuiMayTinh[93] = (checksumlogtien / 10) % 10 + 48;
+    DuLieuGuiMayTinh[94] = checksumlogtien % 10 + 48;
+    DuLieuGuiMayTinh[95] = '_';
+    DuLieuGuiMayTinh[96] = (checksumdata03 / 100000) % 10 + 48;
+    DuLieuGuiMayTinh[97] = (checksumdata03 / 10000) % 10 + 48;
+    DuLieuGuiMayTinh[98] = (checksumdata03 / 1000) % 10 + 48;
+    DuLieuGuiMayTinh[99] = (checksumdata03 / 100) % 10 + 48;
+    DuLieuGuiMayTinh[100] = (checksumdata03 / 10) % 10 + 48;
+    DuLieuGuiMayTinh[101] = checksumdata03 % 10 + 48;
+    DuLieuGuiMayTinh[102] = '_';
+    for (i = 0; i < 20; i++)
+    {
+        DuLieuGuiMayTinh[i + 103] = HoTenHienTai[i];
+    }
+    DuLieuGuiMayTinh[123] = '_';
+    DuLieuGuiMayTinh[124] = (checksumdata04 / 100000) % 10 + 48;
+    DuLieuGuiMayTinh[125] = (checksumdata04 / 10000) % 10 + 48;
+    DuLieuGuiMayTinh[126] = (checksumdata04 / 1000) % 10 + 48;
+    DuLieuGuiMayTinh[127] = (checksumdata04 / 100) % 10 + 48;
+    DuLieuGuiMayTinh[128] = (checksumdata04 / 10) % 10 + 48;
+    DuLieuGuiMayTinh[129] = checksumdata04 % 10 + 48;
+
+    DuLieuGuiMayTinh[130] = '^';
+    DuLieuGuiMayTinh[131] = '#';
+
+    cmd = cholenh;
+    // gui thanh cong se hien man hinh chao
+    phhalHif_Transmit((uint8_t *)&DuLieuGuiMayTinh, 132, (pphhalHif_Callback_t)&ext_SetTxBufferEmptyInterrupt);
+    phUser_Wait(10000);
+    timeout5s = 1;
+    //	Cho_2s();
+    return;
+}
+void setSotienhientai(char hex[])
+{
+}
+int tinhchecksuminput()
+{
+    uint8_t aaa[14], aaa1[14];
+    CKSMayTinhGui = 0;
+    int a = 10000, trangthai = 0;
+    for (int i = 0; i < 5; i++)
+    {
+        checksuminput -= rxbuf.msg8[msg8_in + i - 6];
+        CKSMayTinhGui += (rxbuf.msg8[msg8_in + i - 6] - 48) * a;
+        a /= 10;
+    }
+    checksuminput -= 94;
+    checksuminput -= 35;
+    checksuminput -= 36;
+
+    for (int i = 0; i < 14; i++)
+    {
+        cksuidvao += rxbuf.msg8[i + 2];
+        cksvidthe += Uidbangchu[i];
+        aaa[i] = rxbuf.msg8[i + 2];
+        aaa1[i] = Uidbangchu[i];
+    }
+    if (checksuminput == CKSMayTinhGui)
+    {
+        //        trangthaixacthuc1(8);
+    }
+
+    else
+        trangthaixacthuc1(0);
+    if (cksuidvao == cksvidthe)
+    {
+        //        trangthaixacthuc1(9);
+    }
+
+    else
+        trangthaixacthuc1(0);
+
+    //	laygiatriuid(aaa[14]);
+    //	laygiatriuid(aaa1[14]);
+    if (checksuminput == CKSMayTinhGui && cksuidvao == cksvidthe)
+        trangthai = 1;
+    else
+        trangthai = 0;
+
+    //	trangthaixacthuc1(trangthai);
+
+    return trangthai;
+}
+int TinhCheckSumMK(char hexValSV[], char hexValCard[], int step)
+{
+
+    uint8_t hexChecksum[100];
+    uint8_t hexRD[33] = "98245943068903586309485092485sfgs";
+    int tong1 = 0, tong2 = 0, sizecheck = 0, kq1 = 0, aaa = 100000, trangthai = 0;
+    for (int i = 0; i < 14; i++)
+    {
+        hexChecksum[sizecheck] = Uidbangchu[i];
+        sizecheck++;
+    }
+    for (int i = 0; i < 7; i++)
+    {
+        if (vIDHienTai[i] == 32)
+            break;
+        hexChecksum[sizecheck] = vIDHienTai[i];
+        sizecheck++;
+    }
+    for (int i = 0; i < 33; i++)
+    {
+        hexChecksum[sizecheck] = hexRD[i];
+        sizecheck++;
+    }
+    for (int i = 0; i < 6; i++)
+    {
+        hexChecksum[sizecheck] = hexValSV[i];
+        sizecheck++;
+    }
+    for (int i = 0; i < sizecheck; i++)
+    {
+        kq1 = hexChecksum[i];
+        if (i % step == 0)
+            kq1 = hexChecksum[i] + (i / step) + 3;
+        tong1 += kq1;
+    }
+    for (i = 0; i < 6; i++)
+    {
+        tong2 += (hexValCard[i] - 48) * aaa;
+        aaa /= 10;
+    }
+
+    if (tong1 == tong2)
+    {
+        trangthai = 1;
+    }
+    else
+    {
+        trangthai = 0;
+    }
+
+    return trangthai;
+}
+void XemThongTinThe(void)
+{
+    trovebandau = 0;
+    timeout10s = 0;
+    timeout5s = 0;
+    timeout20s = 0;
+    timetrangthaidoc = 0;
+    trangthaixemthongtinthe = 0;
+
+    XemThongTinThe1();
+    XemThongTinThe2();
+    XemThongTinThe3();
+    XemThongTinThe4();
+    moi_tap_the();
+    Cho_2s();
+    return;
+}
+void XemThongTinThe1(void)
+{
+    int ofs = 4;
+    uint8_t thongtinthe1[121];
+    thongtinthe1[0] = '!';
+    thongtinthe1[1] = '^';
+    thongtinthe1[2] = '4';
+    thongtinthe1[3] = '_';
+    for (i = 0; i < 20; i++)
+    {
+        thongtinthe1[i + ofs] = HoTenHienTai[i];
+    }
+    // 20
+    thongtinthe1[20 + ofs] = '_';
+    for (i = 0; i < 7; i++)
+    {
+        thongtinthe1[i + 21 + ofs] = vIDHienTai[i];
+    }
+    // 28
+    thongtinthe1[28 + ofs] = '_';
+    for (i = 0; i < 12; i++)
+    {
+        thongtinthe1[i + 29 + ofs] = CCCDHienTai[i];
+    }
+    // 41
+    thongtinthe1[41 + ofs] = '_';
+    for (i = 0; i < 6; i++)
+    {
+        thongtinthe1[i + 42 + ofs] = NgayCapCMT[i];
+    }
+    thongtinthe1[48 + ofs] = '_';
+    phhalHif_Transmit((uint8_t *)&thongtinthe1, 53, (pphhalHif_Callback_t)&ext_SetTxBufferEmptyInterrupt);
+    phUser_Wait(10000);
+    return;
+}
+void XemThongTinThe2(void)
+{
+    uint8_t thongtinthe2[121];
+    for (i = 0; i < 13; i++)
+    {
+        thongtinthe2[i] = SoTienHienTai[i];
+    }
+    // 13
+    thongtinthe2[13] = '_';
+    for (i = 0; i < 10; i++)
+    {
+        thongtinthe2[i + 14] = HanMucThe[i];
+    }
+    // 24
+    thongtinthe2[24] = '_';
+    for (i = 0; i < 8; i++)
+    {
+        thongtinthe2[i + 25] = NgaySinh[i];
+        ;
+    }
+    thongtinthe2[33] = '_';
+    thongtinthe2[34] = GioiTinh[0];
+    thongtinthe2[35] = '_';
+    phhalHif_Transmit((uint8_t *)&thongtinthe2, 36, (pphhalHif_Callback_t)&ext_SetTxBufferEmptyInterrupt);
+    phUser_Wait(10000);
+    return;
+}
+
+void XemThongTinThe3(void)
+{
+    uint8_t thongtinthe3[121];
+    for (i = 0; i < 10; i++)
+    {
+        thongtinthe3[i] = DienThoai[i];
+    }
+    thongtinthe3[10] = '_';
+    for (i = 0; i < 36; i++)
+    {
+
+        thongtinthe3[i + 11] = Email[i];
+    }
+    thongtinthe3[47] = '_';
+    for (i = 0; i < 15; i++)
+    {
+        thongtinthe3[i + 48] = SoTheBHYT[i];
+    }
+    thongtinthe3[63] = '_';
+    phhalHif_Transmit((uint8_t *)&thongtinthe3, 64, (pphhalHif_Callback_t)&ext_SetTxBufferEmptyInterrupt);
+    phUser_Wait(10000);
+    return;
+}
+void XemThongTinThe4(void)
+{
+    uint8_t thongtinthe4[121];
+    for (i = 0; i < 54; i++)
+    {
+        thongtinthe4[i] = DiaChi[i];
+    }
+    thongtinthe4[54] = '_';
+    for (i = 0; i < 20; i++)
+    {
+        thongtinthe4[i + 55] = MaDonViMaCaNhan[i];
+    }
+    thongtinthe4[75] = '_';
+    thongtinthe4[76] = '1';
+    thongtinthe4[77] = '0';
+    thongtinthe4[78] = '0';
+    thongtinthe4[79] = '#';
+
+    phhalHif_Transmit((uint8_t *)&thongtinthe4, 80, (pphhalHif_Callback_t)&ext_SetTxBufferEmptyInterrupt);
+    phUser_Wait(10000);
+    return;
+}
+
+/**
+ * Performs the Key set and store it in the Key Store.
+ */
+
+static phStatus_t phExMfCrypto_KeySet(uint16_t wKeyNumber, uint16_t wKeyVersion, uint16_t wKeyStoreKeyType,
+                                      uint8_t *pNewKey)
+{
+    phStatus_t status;
+    status = phKeyStore_FormatKeyEntry(&sKeyStore, wKeyNumber, wKeyStoreKeyType);
+    if (status != PH_ERR_SUCCESS)
+    {
+        return status;
+    }
+
+    /* Set the Key and store it in the Key Store */
+    status = phKeyStore_SetKey(&sKeyStore, wKeyNumber, wKeyVersion, wKeyStoreKeyType, pNewKey, wKeyVersion);
+    return status;
+}
+
+/**
+ * Performs Mifare Desfire create application.
+ */
+static phStatus_t phExMfCrypto_CreateApp(uint8_t bOption, uint8_t bKeySettings1, uint8_t bKeySettings2,
+                                         uint8_t *pAppId)
+{
+    return PH_ERR_SUCCESS;
+}
+
+void ghifile_06()
+{
+
+    status = phalMfdf_AuthenticateAES(&salMfdf,
+                                      PHAL_MFDF_NO_DIVERSIFICATION,
+                                      0x02,
+                                      0x00,
+                                      0x08,
+                                      NULL,
+                                      0x00);
+    if (status != PH_ERR_SUCCESS)
+    {
+        return;
+    }
+
+    SoLuongKyTu[0] = 125;
+    SoLuongKyTu[1] = 0;
+    SoLuongKyTu[2] = 0;
+
+    if (ghi == 1)
+    {
+        pOffset6[0] = vtsave % 256;
+        pOffset6[1] = vtsave / 256;
+        pOffset6[2] = 0;
+    }
+    else if (ghi == 2)
+    {
+        pOffset6[0] = (vtsave + 125) % 256;
+        pOffset6[1] = (vtsave + 125) / 256;
+        pOffset6[2] = 0;
+    }
+    else if (ghi == 3)
+    {
+        pOffset6[0] = (vtsave + 250) % 256;
+        pOffset6[1] = (vtsave + 250) / 256;
+        pOffset6[2] = 0;
+    }
+    else if (ghi == 4)
+    {
+        pOffset6[0] = (vtsave + 375) % 256;
+        pOffset6[1] = (vtsave + 375) / 256;
+        pOffset6[2] = 0;
+    }
+    else if (ghi == 5)
+    {
+        pOffset6[0] = 0;
+        pOffset6[1] = 0;
+        pOffset6[2] = 0;
+        SoLuongKyTu[0] = 0x0C;
+        SoLuongKyTu[1] = 0x00;
+        SoLuongKyTu[2] = 0x00;
+    }
+
+    status = phalMfdf_WriteData(&salMfdf,
+                                PHAL_MFDF_COMMUNICATION_ENC,
+                                0x06,
+                                pOffset6,
+                                Lenh116,
+                                SoLuongKyTu);
+    if (status != PH_ERR_SUCCESS)
+    {
+        ghilai(ghi);
+        cmd = IDLE;
+        return;
+    }
+    ghi++;
+    if (ghi < 6)
+    {
+        ghitieptuc();
+    }
+    if (ghi == 6)
+    {
+        ghi = 0;
+        vtsave = 0;
+    }
+
+    cmd = cholenh;
+}
+
+// doc file 6 tu 1024- 2023
+void docfile_06(void)
+{
+    //	    batdaughi();
+    decodekey(k6);
+    uint16_t wKeyNo = 0x02;
+    uint16_t wKeyVer = 0x00;
+    uint16_t wKeyStoreKeyType = PH_KEYSTORE_KEY_TYPE_AES128;
+    phUser_MemCpy(gkphExMfCrypto_pNewKey, kx, PH_KEYSTORE_KEY_TYPE_AES128_SIZE);
+    status = phExMfCrypto_KeySet(wKeyNo, wKeyVer, wKeyStoreKeyType, gkphExMfCrypto_pNewKey);
+    if (status != PH_ERR_SUCCESS)
+    {
+        return;
+    }
+    else
+    {
+        xacthucfile6();
+    }
+}
+
+void xacthucfile6(void)
+{
+    //  uint8_t docf6 = 1;
+    int doc_temp = 12;
+    uint8_t vt_read[12];
+    status = phalMfdf_AuthenticateAES(&salMfdf,
+                                      PHAL_MFDF_NO_DIVERSIFICATION,
+                                      0x02,
+                                      0x00,
+                                      0x06,
+                                      NULL,
+                                      0x00);
+    if (status != PH_ERR_SUCCESS)
+    {
+        xacthucfileloi();
+        return;
+    }
+    else
+    {
+        // đọc 12B đầu để biết là có vân tay hay không
+        //	  chedocmd_int(1);
+
+        uint8_t ReadLenf6[3] = {0x0C, 0x0, 0x0};
+        uint8_t pOffsetf6[3] = {0, 0, 0};
+
+        status = phalMfdf_ReadData(&salMfdf,
+                                   PHAL_MFDF_COMMUNICATION_ENC,
+                                   0x06,
+                                   pOffsetf6,
+                                   ReadLenf6,
+                                   &bRxDaTa,
+                                   &wRxLength);
+
+        if (status != PH_ERR_SUCCESS)
+        {
+            docfileloi();
+            return;
+        }
+        else
+        {
+            //    	vt_read[0] = '!';
+            //    	vt_read[1] = '^';
+            //    	vt_read[2] = '6';
+
+            for (int i = 0; i < 12; i++)
+            {
+                vt_read[i] = bRxDaTa[i];
+            }
+            //      vt_read[15] = '#';
+
+            //      phhalHif_Transmit((uint8_t *)&vt_read, 16, (pphhalHif_Callback_t)&ext_SetTxBufferEmptyInterrupt);
+            //      phUser_Wait(200000);
+            //      chedocmd_int(2);
+        }
+        // 01 03 03 01 03 00 00 00 00 00 00 00 00
+        for (int i = 0; i < 12; i++)
+        {
+            chedocmd_int(vt_read[i]);
+
+            if (vt_read[i] == 3) // đọc ra toàn bằng 0
+            {
+
+                //    	chedocmd_int(4);
+
+                for (int j = 1; j < 5; j++)
+                {
+                    Lenh116[0] = '!';
+                    Lenh116[1] = '^';
+                    Lenh116[2] = '6';
+
+                    uint8_t bReadLen116[3] = {0x7D, 0, 0};
+                    uint8_t pOffset6_r[3] = {0, 0, 0};
+
+                    if (j == 1)
+                    {
+                        pOffset6_r[0] = doc_temp % 256;
+                        pOffset6_r[1] = doc_temp / 256;
+                        pOffset6_r[2] = 0;
+                    }
+                    else if (j == 2)
+                    {
+                        pOffset6_r[0] = (doc_temp + 125) % 256;
+                        pOffset6_r[1] = (doc_temp + 125) / 256;
+                        pOffset6_r[2] = 0;
+                    }
+                    else if (j == 3)
+                    {
+                        pOffset6_r[0] = (doc_temp + 250) % 256;
+                        pOffset6_r[1] = (doc_temp + 250) / 256;
+                        pOffset6_r[2] = 0;
+                    }
+                    else if (j == 4)
+                    {
+                        pOffset6_r[0] = (doc_temp + 375) % 256;
+                        pOffset6_r[1] = (doc_temp + 375) / 256;
+                        pOffset6_r[2] = 0;
+                    }
+
+                    status = phalMfdf_ReadData(&salMfdf,
+                                               PHAL_MFDF_COMMUNICATION_ENC,
+                                               0x06,
+                                               pOffset6_r,
+                                               bReadLen116,
+                                               &bRxDaTa,
+                                               &wRxLength);
+
+                    if (status != PH_ERR_SUCCESS)
+                    {
+                        docfileloi();
+                        return;
+                    }
+                    else
+                    {
+
+                        for (int i = 0; i < 125; i++)
+                        {
+                            Lenh116[i + 3] = bRxDaTa[i];
+                        }
+                    }
+
+                    Lenh116[128] = '*';
+                    Lenh116[129] = '*';
+                    Lenh116[130] = '*';
+                    phhalHif_Transmit((uint8_t *)&Lenh116, 131, (pphhalHif_Callback_t)&ext_SetTxBufferEmptyInterrupt);
+                    phUser_Wait(200000);
+                }
+
+                doc_temp += 520;
+                //        chedocmd_int(3);
+                phUser_Wait(200000);
+            }
+            else
+            {
+                doc_temp += 1040;
+            }
+        }
+    }
+}
+void HamDocXacThuc()
+{
+    if (xt5 == 1)
+    {
+        //		docfile_05();
+    }
+    else if (xt6 == 1)
+    {
+        docfile_06();
+    }
+    else if (xt7 == 1)
+    {
+        KiemTraViTriLuuVanTay();
+    }
+    xt5 = xt6 = xt7 = 0;
+    cmd = cholenh;
+    timeout10s = 1;
+    //	moi_tap_the();//du them
+}
+
+void batdaughi()
+{
+    uint8_t ghi6k[] = "!^8dd#";
+    phhalHif_Transmit((uint8_t *)&ghi6k, 6, (pphhalHif_Callback_t)&ext_SetTxBufferEmptyInterrupt);
+    phUser_Wait(1000);
+}
+void ghitieptuc()
+{
+    uint8_t ghi6k[] = "!^6okeoke#";
+    phhalHif_Transmit((uint8_t *)&ghi6k, 10, (pphhalHif_Callback_t)&ext_SetTxBufferEmptyInterrupt);
+    phUser_Wait(1000);
+}
+
+void xacthucfile(void)
+{
+
+    uint8_t ghi6k[] = "!^xacthucoke#";
+    phhalHif_Transmit((uint8_t *)&ghi6k, 13, (pphhalHif_Callback_t)&ext_SetTxBufferEmptyInterrupt);
+    phUser_Wait(1000);
+}
+void xacthucfileloi(void)
+{
+
+    uint8_t ghi6k[] = "!^xacthucloi#";
+    phhalHif_Transmit((uint8_t *)&ghi6k, 13, (pphhalHif_Callback_t)&ext_SetTxBufferEmptyInterrupt);
+    phUser_Wait(1000);
+}
+
+void docfileloi(void)
+{
+    uint8_t ghi6k[] = "!^docfileloi#";
+    phhalHif_Transmit((uint8_t *)&ghi6k, 13, (pphhalHif_Callback_t)&ext_SetTxBufferEmptyInterrupt);
+    phUser_Wait(1000);
+}
+void ghilai(int a)
+{
+    uint8_t ghi6k[] = "!^9 #";
+    ghi6k[3] = a;
+    phhalHif_Transmit((uint8_t *)&ghi6k, 5, (pphhalHif_Callback_t)&ext_SetTxBufferEmptyInterrupt);
+    phUser_Wait(1000);
+}
+void chedocmd(void)
+{
+    uint8_t ghi6k[] = "!^2x7#";
+    phhalHif_Transmit((uint8_t *)&ghi6k, 6, (pphhalHif_Callback_t)&ext_SetTxBufferEmptyInterrupt);
+    phUser_Wait(1000);
+}
+void check_uart(void)
+{
+    uint8_t ghi6k[] = "uart_oke";
+    phhalHif_Transmit((uint8_t *)&ghi6k, 8, (pphhalHif_Callback_t)&ext_SetTxBufferEmptyInterrupt);
+    phUser_Wait(1000);
+}
+void chedocmd_int(int a)
+{
+    uint8_t aaa[10] = "0123456789";
+    uint8_t ghi6k[] = "!^2x7 #";
+    ghi6k[5] = aaa[a];
+    phhalHif_Transmit((uint8_t *)&ghi6k, 7, (pphhalHif_Callback_t)&ext_SetTxBufferEmptyInterrupt);
+    phUser_Wait(1000);
+}
+
+void trangthaixacthuc1(int a)
+{
+    uint8_t aaa[10] = "0123456789";
+    uint8_t ghi6k[] = "!^aaa #";
+    ghi6k[5] = aaa[a];
+    phhalHif_Transmit((uint8_t *)&ghi6k, 7, (pphhalHif_Callback_t)&ext_SetTxBufferEmptyInterrupt);
+    phUser_Wait(1000);
+}
+
+void laygiatriuid(char s[])
+{
+    uint8_t s1[] = "!^uid              #";
+    for (int i = 0; i < 14; i++)
+    {
+        s1[i + 5] = s[i];
+    }
+    phhalHif_Transmit((uint8_t *)&s1, 21, (pphhalHif_Callback_t)&ext_SetTxBufferEmptyInterrupt);
+    phUser_Wait(1000);
+}
+void decimalToHex(int decimalNumber)
+{
+    char hexString[5]; // Chuỗi hex có 4 ký tự và 1 ký tự kết thúc chuỗi ('\0')
+
+    // Chuyển hệ 10 thành chuỗi hex
+    snprintf(hexString, sizeof(hexString), "%04X", decimalNumber);
+
+    // In chuỗi hex
+    printf("Chuỗi hex signed 2's complement: %s\n", hexString);
+}
+
+void StringtoInt()
+{
+}
+#endif
+
+// lưu tiếp ok
+// đọc ra oke
